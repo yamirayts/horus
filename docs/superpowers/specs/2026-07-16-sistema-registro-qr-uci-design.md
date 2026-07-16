@@ -179,8 +179,12 @@ Datos; horas acumuladas discriminando carga inicial vs. ciclos reales; % del umb
 ### `/alta` — Alta de equipo
 Form mínimo: id, tipo, marca, modelo, umbral, % alerta, % vencido, horas iniciales. Al guardar genera el QR imprimible.
 
-### `/etiquetas` — Grilla de QRs
-Vista imprimible en grilla (todos o filtrados por tipo), cada QR con su id, lista para A4 → recortar → plastificar → armar el panel de 14 camas + pool.
+### `/etiquetas` — Generación e impresión de QR (con selección y reimpresión)
+Función genuina del producto de código abierto: cualquier institución genera e imprime los QR que necesite sin tocar código.
+- **Selección de qué imprimir**: todos; filtrados por tipo (bombas/monitores/ventiladores); o **individual con checkboxes** (para reimprimir solo los que se arruinaron, sin gastar la hoja entera). "Seleccionar todo" / "limpiar selección".
+- **Copias por equipo**: campo para N copias del mismo QR (dos caras, backup).
+- **Vista de grilla imprimible** (hoja de etiquetas A4), cada QR con su id debajo → recortar → plastificar → armar el panel de 14 camas + pool. Botón Imprimir usa el diálogo nativo del navegador (cualquier impresora hogareña).
+- Reimpresión puntual de un equipo también disponible desde `/equipos/[id]` ("Ver/Imprimir QR").
 
 ### `/prueba` — MODO PRUEBA (banner visible)
 Separado del uso normal. Todo lo que se genera acá queda `origen='sintetico'`:
@@ -266,7 +270,7 @@ Entregables del plan: cronograma con IDs (imprimible / móvil) + planilla de reg
 
 ## 10. Alcance explícito / fuera de alcance
 
-**Dentro:** app completa (5+2 pantallas), 4 tablas, indicadores EN 15341, reporte de falla real, modo prueba (horas iniciales + stress + fallas sintéticas para MTBF), umbrales/% editables, grilla de etiquetas, despliegue gratuito; documento TFI con marcado en verde apoyado en fuentes reales; cronograma de ejecución con IDs + planilla.
+**Dentro:** app completa (5+2 pantallas), 4 tablas, indicadores EN 15341, reporte de falla real, modo prueba (horas iniciales + stress + fallas sintéticas para MTBF), umbrales/% editables, generación/impresión de QR con selección individual y reimpresión + copias por equipo, despliegue gratuito; documento TFI con marcado en verde apoyado en fuentes reales; cronograma de ejecución con IDs + planilla.
 
 **Fuera:** simulador de carga concurrente (descartado: la autora escanea el flujo completo a mano); seguimiento de desgaste por componente (se documenta la lista, no se rastrea por horas); autenticación compleja (PIN opcional por env var para el tablero); datos de pacientes (nunca se registran); validación clínica del mantenimiento basado en condición (excede el TFI, ya discutido en la literatura); MTBF como medición real (solo demostración de cálculo con datos sintéticos declarados).
 
