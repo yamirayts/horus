@@ -1,6 +1,11 @@
 import { sql } from "./client";
 import { calcularHorasCiclo } from "@/lib/horas";
 
+export interface CicloUso {
+  id: number; equipo_id: string; inicio: string; fin: string | null;
+  horas_ciclo: number | string | null; ubicacion: string | null; origen: "real" | "sintetico";
+}
+
 export async function abrirCiclo(
   equipoId: string, ubicacion: string | null,
   origen: "real" | "sintetico" = "real", inicio: Date = new Date()
@@ -25,4 +30,11 @@ export async function cerrarCicloAbierto(equipoId: string, fin: Date = new Date(
              horas_acumuladas = horas_acumuladas + ${horas} WHERE id = ${equipoId}`;
     return horas;
   });
+}
+
+/** Últimos ciclos de uso de un equipo (los más recientes primero). */
+export async function listarCiclos(equipoId: string, limite = 50): Promise<CicloUso[]> {
+  return sql<CicloUso[]>`
+    SELECT * FROM ciclos_uso WHERE equipo_id = ${equipoId}
+    ORDER BY inicio DESC LIMIT ${limite}`;
 }
