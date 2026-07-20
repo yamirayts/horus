@@ -312,6 +312,18 @@ CREATE TABLE IF NOT EXISTS fallas (
   origen       TEXT NOT NULL DEFAULT 'real'          -- 'real' (enfermería) | 'sintetico' (demo MTBF)
 );
 CREATE INDEX IF NOT EXISTS idx_fallas_equipo ON fallas(equipo_id);
+
+-- Lecturas del horómetro interno del equipo (ventiladores), para contrastar
+-- las horas calculadas por QR contra una medición independiente.
+CREATE TABLE IF NOT EXISTS lecturas_horometro (
+  id                   SERIAL PRIMARY KEY,
+  equipo_id            TEXT NOT NULL REFERENCES equipos(id),
+  fecha                TIMESTAMPTZ NOT NULL DEFAULT now(),
+  horas_horometro      NUMERIC(10,2) NOT NULL,  -- lectura del contador interno
+  horas_qr_al_momento  NUMERIC(10,2),           -- acumulado del sistema al momento
+  observacion          TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_horometro_equipo ON lecturas_horometro(equipo_id);
 ```
 
 - [ ] **Step 2: Escribir `db/seed.sql`** (parque del escenario SATI-Q)
@@ -1227,6 +1239,143 @@ git commit -m "feat: /etiquetas con selección individual, copias y reimpresión
 
 ---
 
+### Task 3.4: Contraste con horómetro interno
+
+**Files:**
+- Create: `lib/db/horometro.ts`, `app/api/horometro/route.ts`, `test/horometro.test.ts`, `lib/horometro.ts`
+- Modify: `app/equipos/[id]/page.tsx` (bloque de contraste)
+
+**Interfaces:**
+- Consumes: `getEquipo`, `sql`.
+- Produces:
+  - `calcularDesvio(horasQr: number, horasHorometro: number): { absoluto: number; porcentual: number | null }` — desvío absoluto (`horasQr − horasHorometro`) y porcentual respecto del horómetro; porcentual `null` si horómetro es 0.
+  - `registrarLectura(l: { equipo_id: string; horas_horometro: number; observacion?: string }): Promise<void>` — guarda la lectura junto con las horas del sistema al momento.
+  - `listarLecturas(equipoId: string): Promise<Lectura[]>`.
+  - `POST /api/horometro` → `{ ok }`; `GET /api/horometro?equipo_id=` → `Lectura[]`.
+
+- [ ] **Step 1: Escribir el test que falla**
+
+`test/horometro.test.ts`:
+```ts
+import { describe, it, expect } from "vitest";
+import { calcularDesvio } from "@/lib/horometro";
+
+describe("calcularDesvio", () => {
+  it("QR mide de más → desvío positivo", () => {
+    expect(calcularDesvio(105, 100)).toEqual({ absoluto: 5, porcentual: 5 });
+  });
+  it("QR mide de menos → desvío negativo", () => {
+    expect(calcularDesvio(95, 100)).toEqual({ absoluto: -5, porcentual: -5 });
+  });
+  it("coincidencia exacta → cero", () => {
+    expect(calcularDesvio(100, 100)).toEqual({ absoluto: 0, porcentual: 0 });
+  });
+  it("horómetro en 0 → porcentual null", () => {
+    expect(calcularDesvio(10, 0)).toEqual({ absoluto: 10, porcentual: null });
+  });
+  it("redondea a 2 decimales", () => {
+    expect(calcularDesvio(100.005, 100).absoluto).toBe(0.01);
+  });
+});
+```
+
+- [ ] **Step 2: Correr el test para verificar que falla**
+
+Run: `npx vitest run test/horometro.test.ts`
+Expected: FAIL (import no resuelto).
+
+- [ ] **Step 3: Implementación de la lógica pura**
+
+`lib/horometro.ts`:
+```ts
+/**
+ * Desvío entre las horas calculadas por el sistema (QR) y la lectura del
+ * horómetro interno del equipo, que actúa como patrón de contraste.
+ */
+export function calcularDesvio(
+  horasQr: number, horasHorometro: number
+): { absoluto: number; porcentual: number | null } {
+  const absoluto = Math.round((horasQr - horasHorometro) * 100) / 100;
+  const porcentual =
+    horasHorometro === 0 ? null : Math.round((absoluto / horasHorometro) * 10000) / 100;
+  return { absoluto, porcentual };
+}
+```
+
+- [ ] **Step 4: Correr el test para verificar que pasa**
+
+Run: `npx vitest run test/horometro.test.ts`
+Expected: 5 tests PASS.
+
+- [ ] **Step 5: Capa de datos**
+
+`lib/db/horometro.ts`:
+```ts
+import { sql } from "./client";
+import { getEquipo } from "./equipos";
+
+export interface Lectura {
+  id: number; equipo_id: string; fecha: string;
+  horas_horometro: number; horas_qr_al_momento: number | null; observacion: string | null;
+}
+
+export async function registrarLectura(l: {
+  equipo_id: string; horas_horometro: number; observacion?: string;
+}): Promise<void> {
+  const eq = await getEquipo(l.equipo_id);
+  if (!eq) throw new Error(`Equipo ${l.equipo_id} no existe`);
+  await sql`
+    INSERT INTO lecturas_horometro (equipo_id, horas_horometro, horas_qr_al_momento, observacion)
+    VALUES (${l.equipo_id}, ${l.horas_horometro}, ${eq.horas_acumuladas}, ${l.observacion ?? null})`;
+}
+
+export async function listarLecturas(equipoId: string): Promise<Lectura[]> {
+  return sql<Lectura[]>`
+    SELECT * FROM lecturas_horometro WHERE equipo_id = ${equipoId} ORDER BY fecha DESC`;
+}
+```
+
+- [ ] **Step 6: API**
+
+`app/api/horometro/route.ts`:
+```ts
+import { NextRequest, NextResponse } from "next/server";
+import { registrarLectura, listarLecturas } from "@/lib/db/horometro";
+
+export async function GET(req: NextRequest) {
+  const id = req.nextUrl.searchParams.get("equipo_id");
+  if (!id) return NextResponse.json({ ok: false, error: "falta equipo_id" }, { status: 400 });
+  return NextResponse.json(await listarLecturas(id));
+}
+
+export async function POST(req: NextRequest) {
+  const { equipo_id, horas_horometro, observacion } = await req.json();
+  if (!equipo_id || horas_horometro == null) {
+    return NextResponse.json({ ok: false, error: "faltan datos" }, { status: 400 });
+  }
+  await registrarLectura({ equipo_id, horas_horometro: Number(horas_horometro), observacion });
+  return NextResponse.json({ ok: true });
+}
+```
+
+- [ ] **Step 7: Bloque de contraste en el detalle del equipo**
+
+Modificar `app/equipos/[id]/page.tsx`: agregar sección "Contraste con horómetro interno" con (a) formulario cliente para cargar una lectura (`horas_horometro` + observación) que hace `POST /api/horometro`, y (b) tabla del historial de lecturas mostrando fecha, horas-horómetro, horas-QR al momento, y el desvío absoluto y porcentual usando `calcularDesvio`. Mostrar una nota: "El horómetro interno actúa como patrón de contraste independiente (ver TFI, estrategia de validación en dos niveles)".
+
+- [ ] **Step 8: Verificación de build**
+
+Run: `npx tsc --noEmit && npm run build`
+Expected: sin errores.
+
+- [ ] **Step 9: Commit**
+
+```bash
+git add lib/horometro.ts lib/db/horometro.ts app/api/horometro test/horometro.test.ts app/equipos/[id]/page.tsx
+git commit -m "feat: contraste de horas QR contra horómetro interno del equipo"
+```
+
+---
+
 ## FASE 4 — Despliegue
 
 ### Task 4.1: README y guía de despliegue (Neon + Vercel)
@@ -1505,6 +1654,12 @@ git commit -m "feat: generador TFI — helpers de marcado (negro/verde) y carát
 
 - [ ] **Step 1: Volcar el contenido definitivo (negro)** — Introducción (contexto, marco teórico con citas verificadas: OMS 2012, UNE-EN 13306, EN 15341, Iadanza 2019, Ma 2021, Alshamasneh 2021, Wang 2013, Pereira 2023), Objetivos (6), Metodología (enfoque, **tabla de supuestos SATI-Q 2025** del spec §2, estrategia de validación en dos planos, 6 fases, criterios de inclusión), Resultados-diseño (arquitectura, modelo de datos, indicadores EN 15341, umbrales, componentes de desgaste por tipo, arquitectura informática), Discusión (viabilidad técnica/operativa/normativa, **matriz de validez**, limitaciones y hoja de ruta), Referencias, Anexos A-C.
 
+- [ ] **Step 1b: Incorporar el contenido derivado de las observaciones del jefe de carrera** (ver spec §2 "Alcance del equipamiento" y "Validación de las horas registradas"):
+  1. **Criterios de inclusión (§4.5)**: fundamentar la exclusión de equipos itinerantes (ecógrafo, ECG, RX). Argumento: el QR captura inicio y fin de ciclo, por lo que la relación señal-ruido depende de la duración del ciclo — en equipos de cama (horas/días) el tiempo de escaneo es despreciable y el dato confiable; en itinerantes (minutos) es comparable al uso y vuelve ruidosa la medición. Además su desgaste no correlaciona con horas (RX por disparos, ECG por estudios). Aclarar que **el software es genérico** (el campo `tipo` es libre, aplicable a todo el parque); lo acotado es el alcance de validación del TFI.
+  2. **Estrategia de validación en dos niveles (§4.3)**: (a) exactitud del cálculo, validada empíricamente contra los tiempos reales de cada ciclo (referencia = tiempo real transcurrido, timestamps controlados); (b) contraste con medición independiente mediante el **horómetro interno del ventilador**, que cumple doble rol (equipo registrado y patrón de contraste) — incorporado como propuesta metodológica, con el mecanismo ya implementado en el sistema (`lecturas_horometro`), y ejecución empírica diferida al piloto real por requerir el equipo físico.
+  3. **Discusión/limitaciones**: descarte del **sensor de corriente** como patrón de contraste — ventiladores y bombas poseen baterías internas, por lo que el consumo durante la carga se confundiría con uso real del equipo, comprometiendo la validez de la medición. Se propone el horómetro del ventilador como fuente confiable.
+  4. **Matriz de validez (§6.2)**: agregar fila "Contraste con medición independiente (horómetro) → No validado en esta etapa → Piloto real con el ventilador como patrón".
+
 Tomar el texto del borrador ya redactado (`scratchpad/tfi_completo.txt`) para las partes que ya están en negro; agregar la tabla de supuestos SATI-Q y las 3 fuentes nuevas verificadas.
 
 - [ ] **Step 2: Regenerar y revisar**
@@ -1555,7 +1710,9 @@ git commit -m "feat: TFI — marcadores en verde de datos a completar + document
 ## Self-Review (cobertura del spec)
 
 - **App (Next.js/Neon/Vercel)** → Fases 0-4. ✅
-- **4 tablas + flag origen** → Task 1.1. ✅
+- **5 tablas + flag origen** → Task 1.1. ✅
+- **Contraste con horómetro (observación del jefe de carrera)** → Task 3.4 + Task 6.2 Step 1b. ✅
+- **Fundamento de exclusión de itinerantes** → Task 6.2 Step 1b. ✅
 - **Escaneo rápido con toggle, antidoble-lectura, tolerancia a red** → Task 1.5. ✅
 - **Umbrales/% editables** → Task 2.2 (PATCH) + 2.3 (UI). ✅
 - **Indicadores EN 15341 (incluido MTBF con nota sintética)** → Task 2.1 + 2.4. ✅

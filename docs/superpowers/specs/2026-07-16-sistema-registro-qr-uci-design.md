@@ -55,6 +55,23 @@ Informe oficial de benchmarking de la Sociedad Argentina de Terapia Intensiva (p
 | Parque total | 17 ventiladores (14+3 backup), 14 monitores, 70 bombas | dato del escenario |
 | Flujo diario resultante | ~40-60 escaneos/día (toda la UCI) | derivado |
 
+### Alcance del equipamiento: por qué solo los 3 de cama
+
+Observación del jefe de carrera (Ignacio, jul-2026): contemplar ecógrafos, ECG y RX, y que el sistema sea robusto ante distintos formatos de uso. Resolución acordada:
+
+- **El software es genérico**: el campo `tipo` es libre, de modo que cualquier institución puede dar de alta cualquier equipo. Lo acotado es el **alcance de validación del TFI**, no la capacidad del sistema.
+- **Fundamento de la exclusión de itinerantes** (ecógrafo, ECG, RX): el QR captura *inicio y fin de ciclo*, por lo que la relación señal-ruido depende de la duración del ciclo. En equipos de cama (ciclos de horas o días) el tiempo de escaneo es despreciable y el dato es confiable; en itinerantes (uso de pocos minutos) el escaneo insume un tiempo comparable al uso, lo que vuelve ruidosa la medición. Además, su desgaste **no correlaciona con horas**: el RX se desgasta por disparos y el ECG por estudios realizados.
+- Conclusión: el método propuesto tiene mejor sustento para equipos de alto uso horario, que son el objeto de estudio.
+
+### Validación de las horas registradas (dos niveles)
+
+Respuesta a la observación de validar el dato del QR contra un sistema independiente:
+
+1. **Exactitud del cálculo (empírico, en esta etapa)**: se contrasta la acumulación del sistema contra los tiempos reales de cada ciclo, conocidos porque se controlan los timestamps. La referencia es el tiempo real transcurrido.
+2. **Contraste con medición independiente (teórico, requiere equipo físico)**: el **horómetro interno del ventilador** actúa como patrón; el ventilador cumple doble rol (equipo registrado y patrón de contraste). El sistema incorpora el registro de lecturas de horómetro para hacerlo operativo en un piloto real.
+
+**Descarte del sensor de corriente** (sugerido como alternativa): no es confiable como patrón porque ventiladores y bombas tienen **baterías internas**, de modo que el consumo durante la carga de batería se confundiría con uso real del equipo. Por eso se propone el horómetro del ventilador como fuente de contraste. (Hallazgo propio; va a Discusión/limitaciones.)
+
 ### Reglas de dominio (aportadas por la autora, kinesióloga/fisiatra)
 
 - El escaneo ocurre **solo** al asignar la bomba al paciente y al retirarla. No hay escaneos intermedios.
@@ -142,6 +159,18 @@ descripcion  TEXT
 origen       TEXT NOT NULL DEFAULT 'real' -- 'real' (reporte de enfermería) | 'sintetico' (demo MTBF)
 ```
 
+### Tabla `lecturas_horometro`
+Registro de lecturas del horómetro interno del equipo (ventiladores), para contrastar contra las horas calculadas por QR.
+```
+id                SERIAL PRIMARY KEY
+equipo_id         TEXT NOT NULL REFERENCES equipos(id)
+fecha             TIMESTAMPTZ NOT NULL DEFAULT now()
+horas_horometro   NUMERIC(10,2) NOT NULL   -- lectura del contador interno del equipo
+horas_qr_al_momento NUMERIC(10,2)          -- horas acumuladas por el sistema al momento de la lectura
+observacion       TEXT
+```
+El detalle del equipo muestra la comparación y el **desvío** (`horas_qr − horas_horometro`) entre ambas fuentes.
+
 ### Reglas de negocio
 - **Toggle por escaneo**: equipo `disponible` → abre ciclo (`inicio=now()`), estado `en_uso`; equipo `en_uso` → cierra ciclo (`fin=now()`, `horas_ciclo=fin−inicio`, suma a `horas_acumuladas`), estado `disponible`.
 - **Alerta AMP (aviso)**: `horas_acumuladas ≥ umbral_horas × pct_alerta`.
@@ -168,6 +197,7 @@ Cards/tabla: id, tipo, estado, horas acumuladas, % del umbral con barra de color
 
 ### `/equipos/[id]` — Detalle
 Datos; horas acumuladas discriminando carga inicial vs. ciclos reales; % del umbral; historial de ciclos, mantenimientos y fallas. Botones: Registrar mantenimiento (resetea), **Editar umbral / % de alerta / % de vencido**, Ver/Imprimir QR.
+**Bloque de contraste con horómetro**: formulario para cargar una lectura del horómetro interno (fecha + horas) y tabla del historial de lecturas mostrando horas-QR vs horas-horómetro y el **desvío** entre ambas.
 
 ### `/tablero` — Ingeniería Clínica
 - Panel de alertas: aviso (≥ pct_alerta), vencidos (≥ pct_vencido), equipos en falla.
@@ -226,7 +256,13 @@ Base: borrador `TFI_Rayts_Yamila_completo.docx` (estructura Anexo 2 UNAJ). Forma
 - **Verde**: marcador de dato a completar tras las pruebas, redactado como instrucción concreta (qué dato, de qué etapa, placeholder de ejemplo).
 - **Resaltado (opcional)**: nota/decisión pendiente de confirmar.
 
-**En negro ya** (evaluable de inmediato): Resumen (sin cifras de resultados), Introducción con marco teórico y citas reales, Objetivos (6), Metodología completa (con tabla de supuestos SATI-Q 2025, estrategia de validación en dos planos, 6 fases, criterios de inclusión), Diseño del sistema (arquitectura, modelo de datos, indicadores EN 15341, umbrales, componentes de desgaste, arquitectura informática), Discusión (viabilidad técnica/operativa/normativa, matriz de validez, limitaciones y hoja de ruta), Referencias verificadas, Anexos A-C.
+**Contenido incorporado por las observaciones del jefe de carrera** (jul-2026), todo en negro:
+- **Criterios de inclusión del equipamiento**: fundamento de la exclusión de itinerantes (relación señal-ruido según duración del ciclo; desgaste no correlacionado con horas en RX/ECG) y aclaración de que el software es genérico mientras el alcance de validación es el acotado.
+- **Estrategia de validación en dos niveles**: exactitud del cálculo (empírica) + contraste con horómetro del ventilador (teórico, con el ventilador en doble rol).
+- **Discusión/limitaciones**: descarte del sensor de corriente como patrón por las baterías internas de ventiladores y bombas.
+- **Matriz de validez**: fila "Contraste con medición independiente (horómetro) → No validado en esta etapa → Piloto real con ventilador como patrón".
+
+**En negro ya** (evaluable de inmediato): Resumen (sin cifras de resultados), Introducción con marco teórico y citas reales, Objetivos (6), Metodología completa (con tabla de supuestos SATI-Q 2025, estrategia de validación en dos planos y en dos niveles, 6 fases, criterios de inclusión fundamentados), Diseño del sistema (arquitectura, modelo de datos, indicadores EN 15341, umbrales, componentes de desgaste, arquitectura informática), Discusión (viabilidad técnica/operativa/normativa, matriz de validez, limitaciones y hoja de ruta), Referencias verificadas, Anexos A-C.
 
 **En verde** (tras pruebas): cifras de resultados en Resumen/Abstract; 5.4.4 capturas + URLs; 5.5 resultados de las 4 etapas; MTBF con nota de datos sintéticos; tabla resumen de resultados; 6.1.1 y 6.3 interpretación; conclusión de validación empírica; Anexo D protocolo ejecutado.
 
