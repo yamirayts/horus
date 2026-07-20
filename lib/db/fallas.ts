@@ -24,3 +24,8 @@ export async function listarFallas(equipoId?: string): Promise<Falla[]> {
   if (equipoId) return sql<Falla[]>`SELECT * FROM fallas WHERE equipo_id = ${equipoId} ORDER BY fecha DESC`;
   return sql<Falla[]>`SELECT * FROM fallas ORDER BY fecha DESC`;
 }
+
+/** Fallas recientes (fecha >= desde), para MTBF y bucket "en falla" del tablero (misma ventana que TUE). */
+export async function listarFallasDesde(desde: Date): Promise<Falla[]> {
+  return sql<Falla[]>`SELECT * FROM fallas WHERE fecha >= ${desde} ORDER BY fecha DESC`;
+}

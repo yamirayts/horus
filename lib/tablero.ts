@@ -1,5 +1,5 @@
 import { listarEquipos, type Equipo } from "@/lib/db/equipos";
-import { listarFallas } from "@/lib/db/fallas";
+import { listarFallasDesde } from "@/lib/db/fallas";
 import { sumarHorasPorEquipoDesde } from "@/lib/db/ciclos";
 import { estadoAlerta, pctUmbral, type NivelAlerta } from "@/lib/alertas";
 import { calcularTUE, clasificarTUE, calcularMTBF, proyeccionDiasHastaPM } from "@/lib/indicadores";
@@ -46,14 +46,16 @@ export interface Tablero {
  * Compartido por la página /tablero y el handler /api/tablero para no duplicar lógica.
  */
 export async function construirTablero(): Promise<Tablero> {
-  const [equipos, fallas] = await Promise.all([listarEquipos(), listarFallas()]);
-
   const desde = new Date(Date.now() - HORAS_PERIODO_TUE * 60 * 60 * 1000);
-  const horasUsoPorEquipo = await sumarHorasPorEquipoDesde(desde);
+  const [equipos, fallas, horasUsoPorEquipo] = await Promise.all([
+    listarEquipos(),
+    listarFallasDesde(desde),
+    sumarHorasPorEquipoDesde(desde),
+  ]);
 
   const equipoPorId = new Map(equipos.map((e) => [e.id, e]));
 
-  // Cantidad de fallas por equipo (flag enFalla) y por tipo (MTBF).
+  // Cantidad de fallas recientes (últimos 30 días, misma ventana que TUE) por equipo (flag enFalla) y por tipo (MTBF).
   const fallasPorEquipo = new Map<string, number>();
   const fallasPorTipo = new Map<string, number>();
   for (const f of fallas) {
@@ -103,7 +105,7 @@ export async function construirTablero(): Promise<Tablero> {
       r.horasAcumuladas += Number(e.horas_acumuladas);
     }
     resumen[tipo] = r;
-    // MTBF: incluye fallas sintéticas cargadas para pruebas — ver informe.
+    // MTBF (últimos 30 días): incluye fallas sintéticas cargadas para pruebas — ver informe.
     mtbfPorTipo[tipo] = calcularMTBF(r.horasAcumuladas, fallasPorTipo.get(tipo) ?? 0);
   }
 
