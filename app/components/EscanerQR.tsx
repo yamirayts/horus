@@ -2,11 +2,20 @@
 
 import { useEffect, useRef, useState } from "react";
 import { Html5Qrcode } from "html5-qrcode";
+import type { Equipo } from "@/lib/db/equipos";
+import type { Accion } from "@/lib/alertas";
 
 const ELEMENT_ID = "lector-qr";
 const VENTANA_ANTIDOBLE_MS = 3000; // mismo id leído antes de este tiempo se ignora
 const REINTENTO_MS = 1500; // demora antes del reintento por falla de red
 const CONFIRMACION_MS = 1500; // tiempo que se muestra la confirmación/error antes de reanudar
+
+interface RespuestaConsulta {
+  ok: boolean;
+  equipo?: Equipo;
+  accion?: Accion;
+  error?: string;
+}
 
 interface RespuestaScan {
   ok: boolean;
@@ -18,7 +27,10 @@ interface RespuestaScan {
 /** Pantalla que se muestra sobre la cámara mientras no se está escaneando activamente. */
 type EstadoPantalla =
   | { tipo: "escaneando" }
-  | { tipo: "procesando" }
+  | { tipo: "consultando" }
+  | { tipo: "tarjeta"; id: string; equipo: Equipo; accion: Accion }
+  | { tipo: "tarjeta_error"; mensaje: string }
+  | { tipo: "enviando" }
   | { tipo: "confirmando"; mensaje: string; variante: "activar" | "desactivar" | "error" }
   | { tipo: "sin_conexion"; mensaje: string };
 
@@ -26,10 +38,17 @@ interface EscaneoPendiente {
   id: string;
 }
 
+const ETIQUETA_ESTADO: Record<Equipo["estado"], string> = {
+  disponible: "Disponible",
+  en_uso: "En uso",
+  mantenimiento: "En mantenimiento",
+};
+
 /**
- * Escáner QR de pantalla completa: abre la cámara al montar, envía cada lectura
- * a /api/scan (toggle activar/desactivar) y vuelve a escuchar automáticamente.
- * Pensado para uso rápido a un paso: leer QR -> confirmación breve -> siguiente lectura.
+ * Escáner QR de pantalla completa: abre la cámara al montar, y al decodificar un QR
+ * consulta el equipo (GET /api/scan) y muestra una tarjeta de confirmación con un
+ * botón grande. Solo al tocar ese botón se ejecuta el toggle (POST /api/scan).
+ * Flujo de dos pasos: leer QR -> confirmar con un toque -> confirmación breve -> siguiente lectura.
  */
 export default function EscanerQR() {
   const [estado, setEstado] = useState<EstadoPantalla>({ tipo: "escaneando" });
@@ -53,7 +72,7 @@ export default function EscanerQR() {
     scannerRef.current?.resume();
   }
 
-  // Envía un escaneo al backend. Distingue error de red (reintentable/encolable)
+  // Ejecuta el toggle en el backend. Distingue error de red (reintentable/encolable)
   // de error de aplicación (equipo desconocido, en mantenimiento: no se reintenta).
   async function enviarEscaneo(id: string, intento = 1): Promise<void> {
     try {
@@ -106,6 +125,27 @@ export default function EscanerQR() {
     }
   }
 
+  // Paso 1: consulta el equipo (sin efectos secundarios) y arma la tarjeta de confirmación.
+  async function consultarEquipo(id: string): Promise<void> {
+    try {
+      const res = await fetch(`/api/scan?id=${encodeURIComponent(id)}`);
+      const data: RespuestaConsulta = await res.json();
+      if (!data.ok || !data.equipo || !data.accion) {
+        setEstado({ tipo: "tarjeta_error", mensaje: data.error ?? "equipo desconocido" });
+        return;
+      }
+      setEstado({ tipo: "tarjeta", id, equipo: data.equipo, accion: data.accion });
+    } catch {
+      setEstado({ tipo: "tarjeta_error", mensaje: "no se pudo consultar el equipo" });
+    }
+  }
+
+  // Paso 2: el enfermero tocó el botón grande de la tarjeta -> recién ahí se ejecuta el toggle.
+  function confirmarAccion(id: string) {
+    setEstado({ tipo: "enviando" });
+    void enviarEscaneo(id);
+  }
+
   // Callback de lectura exitosa del lector QR.
   function alLeerCodigo(textoDecodificado: string) {
     if (procesandoRef.current) return;
@@ -117,9 +157,9 @@ export default function EscanerQR() {
     }
     ultimoRef.current = { id: textoDecodificado, ts: ahora };
     procesandoRef.current = true;
-    setEstado({ tipo: "procesando" });
+    setEstado({ tipo: "consultando" });
     scannerRef.current?.pause();
-    void enviarEscaneo(textoDecodificado);
+    void consultarEquipo(textoDecodificado);
   }
 
   useEffect(() => {
@@ -171,7 +211,7 @@ export default function EscanerQR() {
 
   const colorVariante: Record<"activar" | "desactivar" | "error", string> = {
     activar: "bg-emerald-700/95",
-    desactivar: "bg-sky-700/95",
+    desactivar: "bg-orange-700/95",
     error: "bg-red-700/95",
   };
 
@@ -183,9 +223,74 @@ export default function EscanerQR() {
           className="h-full w-full [&>video]:h-full [&>video]:w-full [&>video]:object-cover"
         />
 
-        {estado.tipo === "procesando" && (
+        {estado.tipo === "consultando" && (
           <div className="absolute inset-0 flex items-center justify-center bg-black/70 p-6 text-center text-2xl font-bold">
-            Procesando…
+            Consultando…
+          </div>
+        )}
+
+        {estado.tipo === "enviando" && (
+          <div className="absolute inset-0 flex items-center justify-center bg-black/70 p-6 text-center text-2xl font-bold">
+            Enviando…
+          </div>
+        )}
+
+        {estado.tipo === "tarjeta" && (
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-6 bg-black/90 p-6 text-center">
+            <div>
+              <p className="text-sm text-gray-300">
+                {estado.equipo.tipo}
+                {estado.equipo.marca ? ` · ${estado.equipo.marca}` : ""}
+                {estado.equipo.modelo ? ` ${estado.equipo.modelo}` : ""}
+              </p>
+              <p className="text-4xl font-extrabold">{estado.id}</p>
+              <p className="mt-2 text-sm text-gray-400">
+                Estado actual: {ETIQUETA_ESTADO[estado.equipo.estado]}
+              </p>
+            </div>
+
+            {estado.accion === "bloqueado" ? (
+              <button
+                type="button"
+                disabled
+                className="w-full max-w-xs rounded-xl bg-gray-600 py-8 text-xl font-bold text-gray-300"
+              >
+                EQUIPO EN MANTENIMIENTO
+                <br />
+                <span className="text-sm font-normal">No se puede registrar uso</span>
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={() => confirmarAccion(estado.id)}
+                className={`w-full max-w-xs rounded-xl py-10 text-3xl font-extrabold text-white shadow-lg active:scale-95 ${
+                  estado.accion === "activar" ? "bg-green-600" : "bg-orange-600"
+                }`}
+              >
+                {estado.accion === "activar" ? "ACTIVAR" : "DESACTIVAR"}
+              </button>
+            )}
+
+            <button
+              type="button"
+              onClick={reanudar}
+              className="rounded border border-gray-500 px-4 py-2 text-sm text-gray-300"
+            >
+              Cancelar
+            </button>
+          </div>
+        )}
+
+        {estado.tipo === "tarjeta_error" && (
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-6 bg-black/90 p-6 text-center">
+            <p className="text-xl font-bold text-red-400">⚠ {estado.mensaje}</p>
+            <button
+              type="button"
+              onClick={reanudar}
+              className="rounded border border-gray-500 px-4 py-2 text-sm text-gray-300"
+            >
+              Cancelar
+            </button>
           </div>
         )}
 
