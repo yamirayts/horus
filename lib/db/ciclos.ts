@@ -38,3 +38,18 @@ export async function listarCiclos(equipoId: string, limite = 50): Promise<Ciclo
     SELECT * FROM ciclos_uso WHERE equipo_id = ${equipoId}
     ORDER BY inicio DESC LIMIT ${limite}`;
 }
+
+/**
+ * Suma de horas de ciclos cerrados por equipo desde una fecha dada (para TUE del tablero).
+ * Solo cuenta ciclos con horas_ciclo calculado (cerrados); los abiertos no suman al período.
+ */
+export async function sumarHorasPorEquipoDesde(desde: Date): Promise<Record<string, number>> {
+  const filas = await sql<{ equipo_id: string; total: number }[]>`
+    SELECT equipo_id, COALESCE(SUM(horas_ciclo), 0) AS total
+    FROM ciclos_uso
+    WHERE inicio >= ${desde} AND horas_ciclo IS NOT NULL
+    GROUP BY equipo_id`;
+  const mapa: Record<string, number> = {};
+  for (const f of filas) mapa[f.equipo_id] = Number(f.total);
+  return mapa;
+}
