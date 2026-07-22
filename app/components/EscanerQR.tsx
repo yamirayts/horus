@@ -31,11 +31,19 @@ type EstadoPantalla =
   | { tipo: "tarjeta"; id: string; equipo: Equipo; accion: Accion }
   | { tipo: "tarjeta_error"; mensaje: string }
   | { tipo: "enviando" }
-  | { tipo: "confirmando"; mensaje: string; variante: "activar" | "desactivar" | "error" }
+  | { tipo: "confirmando"; mensaje: string; variante: "activar" | "desactivar" | "error" | "falla" }
   | { tipo: "sin_conexion"; mensaje: string };
 
 interface EscaneoPendiente {
   id: string;
+}
+
+/** Reporte de falla encolado por una falla de red, para reintentar cuando vuelva la conexión. */
+interface FallaPendiente {
+  equipoId: string;
+  tipo: string;
+  descripcion?: string;
+  ponerEnMantenimiento: boolean;
 }
 
 const ETIQUETA_ESTADO: Record<Equipo["estado"], string> = {
@@ -43,6 +51,15 @@ const ETIQUETA_ESTADO: Record<Equipo["estado"], string> = {
   en_uso: "En uso",
   mantenimiento: "En mantenimiento",
 };
+
+/** Tipos de falla que puede reportar el enfermero desde el escaneo (valores exactos que espera la DB). */
+const TIPOS_FALLA: { value: string; label: string }[] = [
+  { value: "no_enciende", label: "No enciende" },
+  { value: "alarma", label: "Alarma" },
+  { value: "bateria", label: "Batería" },
+  { value: "mecanica", label: "Mecánica" },
+  { value: "otra", label: "Otra" },
+];
 
 /**
  * Escáner QR de pantalla completa: abre la cámara al montar, y al decodificar un QR
@@ -52,11 +69,19 @@ const ETIQUETA_ESTADO: Record<Equipo["estado"], string> = {
  */
 export default function EscanerQR() {
   const [estado, setEstado] = useState<EstadoPantalla>({ tipo: "escaneando" });
-  const [reportarFallaAbierto, setReportarFallaAbierto] = useState(false);
+
+  // Mini-formulario de reporte de falla: solo se abre con un equipo ya identificado (tarjeta abierta).
+  const [modalFalla, setModalFalla] = useState<{ equipoId: string } | null>(null);
+  const [tipoFalla, setTipoFalla] = useState(TIPOS_FALLA[0].value);
+  const [descripcionFalla, setDescripcionFalla] = useState("");
+  const [ponerEnMantenimiento, setPonerEnMantenimiento] = useState(true);
+  const [enviandoFalla, setEnviandoFalla] = useState(false);
+  const [errorFalla, setErrorFalla] = useState<string | null>(null);
 
   const scannerRef = useRef<Html5Qrcode | null>(null);
   const ultimoRef = useRef<{ id: string; ts: number } | null>(null);
   const pendientesRef = useRef<EscaneoPendiente[]>([]);
+  const pendientesFallaRef = useRef<FallaPendiente[]>([]);
   const procesandoRef = useRef(false);
 
   // Hora local HH:MM para el mensaje de confirmación.
@@ -125,6 +150,16 @@ export default function EscanerQR() {
     }
   }
 
+  // Reintenta los reportes de falla que quedaron encolados por fallas de red previas.
+  async function reintentarPendientesFalla(): Promise<void> {
+    const pendientes = pendientesFallaRef.current;
+    if (pendientes.length === 0) return;
+    pendientesFallaRef.current = [];
+    for (const p of pendientes) {
+      await enviarReporteFalla(p);
+    }
+  }
+
   // Paso 1: consulta el equipo (sin efectos secundarios) y arma la tarjeta de confirmación.
   async function consultarEquipo(id: string): Promise<void> {
     try {
@@ -144,6 +179,84 @@ export default function EscanerQR() {
   function confirmarAccion(id: string) {
     setEstado({ tipo: "enviando" });
     void enviarEscaneo(id);
+  }
+
+  // Abre el mini-formulario de falla con el equipo ya identificado por la tarjeta.
+  function abrirReportarFalla(equipoId: string) {
+    setTipoFalla(TIPOS_FALLA[0].value);
+    setDescripcionFalla("");
+    setPonerEnMantenimiento(true);
+    setErrorFalla(null);
+    setModalFalla({ equipoId });
+  }
+
+  function cerrarReportarFalla() {
+    setModalFalla(null);
+    setErrorFalla(null);
+  }
+
+  // Envía el reporte de falla. El origen lo fuerza siempre el backend a "real".
+  // Misma lógica de reintento/cola que enviarEscaneo: ante falla de red reintenta una vez
+  // a los 1500 ms; si vuelve a fallar, encola el reporte (no se pierde) y sigue escaneando.
+  async function enviarReporteFalla(datos: FallaPendiente, intento = 1): Promise<void> {
+    try {
+      const res = await fetch("/api/falla", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          equipo_id: datos.equipoId,
+          tipo: datos.tipo,
+          descripcion: datos.descripcion,
+          ponerEnMantenimiento: datos.ponerEnMantenimiento,
+        }),
+      });
+      const data: { ok: boolean; error?: string } = await res.json();
+
+      if (!data.ok) {
+        // Error de aplicación (ej. equipo_id faltante): no se reintenta.
+        setEnviandoFalla(false);
+        setErrorFalla(data.error ?? "no se pudo registrar la falla");
+        return;
+      }
+
+      setEnviandoFalla(false);
+      setModalFalla(null);
+      setEstado({
+        tipo: "confirmando",
+        mensaje: datos.ponerEnMantenimiento
+          ? "✓ Falla reportada — equipo en mantenimiento"
+          : "✓ Falla reportada",
+        variante: "falla",
+      });
+      setTimeout(reanudar, CONFIRMACION_MS);
+    } catch {
+      // Falla de red (no hubo respuesta): reintentar una vez a los 1500 ms.
+      if (intento === 1) {
+        setTimeout(() => {
+          void enviarReporteFalla(datos, 2);
+        }, REINTENTO_MS);
+        return;
+      }
+      // Segundo intento también falló: encolar el reporte y seguir escaneando.
+      pendientesFallaRef.current.push(datos);
+      setEnviandoFalla(false);
+      setModalFalla(null);
+      setEstado({ tipo: "sin_conexion", mensaje: "⚠ Sin conexión — reintentando…" });
+      setTimeout(reanudar, CONFIRMACION_MS);
+    }
+  }
+
+  // Handler del botón "Reportar" del mini-formulario: arma los datos desde el estado del form.
+  async function enviarFalla(): Promise<void> {
+    if (!modalFalla) return;
+    setEnviandoFalla(true);
+    setErrorFalla(null);
+    await enviarReporteFalla({
+      equipoId: modalFalla.equipoId,
+      tipo: tipoFalla,
+      descripcion: descripcionFalla.trim() || undefined,
+      ponerEnMantenimiento,
+    });
   }
 
   // Callback de lectura exitosa del lector QR.
@@ -182,13 +295,18 @@ export default function EscanerQR() {
         console.error("No se pudo iniciar la cámara:", err);
       });
 
-    // Reintenta los pendientes apenas vuelve la conexión, y cada 5 s como respaldo.
+    // Reintenta los pendientes (escaneos y reportes de falla) apenas vuelve la conexión,
+    // y cada 5 s como respaldo.
     const alVolverConexion = () => {
       void reintentarPendientes();
+      void reintentarPendientesFalla();
     };
     window.addEventListener("online", alVolverConexion);
     const intervalo = window.setInterval(() => {
-      if (navigator.onLine) void reintentarPendientes();
+      if (navigator.onLine) {
+        void reintentarPendientes();
+        void reintentarPendientesFalla();
+      }
     }, 5000);
 
     return () => {
@@ -209,10 +327,11 @@ export default function EscanerQR() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const colorVariante: Record<"activar" | "desactivar" | "error", string> = {
+  const colorVariante: Record<"activar" | "desactivar" | "error" | "falla", string> = {
     activar: "bg-emerald-700/95",
     desactivar: "bg-orange-700/95",
     error: "bg-red-700/95",
+    falla: "bg-red-800/95",
   };
 
   return (
@@ -271,13 +390,22 @@ export default function EscanerQR() {
               </button>
             )}
 
-            <button
-              type="button"
-              onClick={reanudar}
-              className="rounded border border-gray-500 px-4 py-2 text-sm text-gray-300"
-            >
-              Cancelar
-            </button>
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={reanudar}
+                className="rounded border border-gray-500 px-4 py-2 text-sm text-gray-300"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={() => abrirReportarFalla(estado.id)}
+                className="rounded border border-red-400 px-4 py-2 text-sm text-red-300"
+              >
+                ⚠ Reportar falla
+              </button>
+            </div>
           </div>
         )}
 
@@ -309,30 +437,75 @@ export default function EscanerQR() {
         )}
       </div>
 
-      <div className="flex items-center justify-between gap-2 bg-gray-900 p-3">
+      <div className="flex items-center justify-center gap-2 bg-gray-900 p-3">
         <span className="text-xs text-gray-400">Apuntá la cámara al código QR del equipo</span>
-        <button
-          type="button"
-          onClick={() => setReportarFallaAbierto(true)}
-          className="shrink-0 rounded border border-red-400 px-2 py-1 text-xs text-red-300"
-        >
-          ⚠ Reportar falla
-        </button>
       </div>
 
-      {reportarFallaAbierto && (
+      {modalFalla && (
         <div className="fixed inset-0 z-10 flex items-center justify-center bg-black/60 p-6">
           <div className="w-full max-w-sm rounded bg-white p-4 text-gray-900">
-            <p className="mb-3 text-sm">
-              El reporte de fallas todavía no está disponible: función en Task 3.1.
-            </p>
-            <button
-              type="button"
-              onClick={() => setReportarFallaAbierto(false)}
-              className="w-full rounded bg-gray-800 py-2 text-white"
+            <p className="mb-3 text-sm font-bold">Reportar falla — {modalFalla.equipoId}</p>
+
+            <label className="mb-1 block text-xs font-semibold text-gray-600" htmlFor="tipo-falla">
+              Tipo de falla
+            </label>
+            <select
+              id="tipo-falla"
+              value={tipoFalla}
+              onChange={(e) => setTipoFalla(e.target.value)}
+              disabled={enviandoFalla}
+              className="mb-3 w-full rounded border border-gray-300 p-2 text-sm"
             >
-              Entendido
-            </button>
+              {TIPOS_FALLA.map((t) => (
+                <option key={t.value} value={t.value}>
+                  {t.label}
+                </option>
+              ))}
+            </select>
+
+            <label className="mb-1 block text-xs font-semibold text-gray-600" htmlFor="descripcion-falla">
+              Descripción (opcional)
+            </label>
+            <textarea
+              id="descripcion-falla"
+              value={descripcionFalla}
+              onChange={(e) => setDescripcionFalla(e.target.value)}
+              disabled={enviandoFalla}
+              rows={1}
+              placeholder="Detalle adicional…"
+              className="mb-3 w-full rounded border border-gray-300 p-2 text-sm"
+            />
+
+            <label className="mb-3 flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={ponerEnMantenimiento}
+                onChange={(e) => setPonerEnMantenimiento(e.target.checked)}
+                disabled={enviandoFalla}
+              />
+              Poner en mantenimiento
+            </label>
+
+            {errorFalla && <p className="mb-3 text-xs text-red-600">⚠ {errorFalla}</p>}
+
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={cerrarReportarFalla}
+                disabled={enviandoFalla}
+                className="flex-1 rounded border border-gray-400 py-2 text-sm text-gray-700 disabled:opacity-50"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={() => void enviarFalla()}
+                disabled={enviandoFalla}
+                className="flex-1 rounded bg-green-700 py-2 text-sm font-bold text-white disabled:opacity-50"
+              >
+                {enviandoFalla ? "Enviando…" : "Reportar"}
+              </button>
+            </div>
           </div>
         </div>
       )}
