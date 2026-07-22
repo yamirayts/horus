@@ -4,8 +4,10 @@ import { getEquipo } from "@/lib/db/equipos";
 import { listarCiclos } from "@/lib/db/ciclos";
 import { listarMantenimientos } from "@/lib/db/mantenimientos";
 import { listarFallas } from "@/lib/db/fallas";
+import { listarLecturas } from "@/lib/db/horometro";
 import BarraUmbral from "@/app/components/BarraUmbral";
 import EquipoAcciones from "./EquipoAcciones";
+import HorometroLecturas from "./HorometroLecturas";
 
 // El estado y las horas cambian con cada escaneo: nunca cachear esta página.
 export const dynamic = "force-dynamic";
@@ -34,10 +36,11 @@ export default async function DetalleEquipoPage({ params }: DetalleEquipoPagePro
   const equipo = await getEquipo(params.id);
   if (!equipo) notFound();
 
-  const [ciclos, mantenimientos, fallas] = await Promise.all([
+  const [ciclos, mantenimientos, fallas, lecturasHorometro] = await Promise.all([
     listarCiclos(equipo.id, 20),
     listarMantenimientos(equipo.id),
     listarFallas(equipo.id),
+    listarLecturas(equipo.id),
   ]);
 
   // NUMERIC de postgres llega como string: convertir antes de operar.
@@ -160,6 +163,8 @@ export default async function DetalleEquipoPage({ params }: DetalleEquipoPagePro
           </ul>
         )}
       </section>
+
+      <HorometroLecturas equipoId={equipo.id} lecturas={lecturasHorometro} />
     </main>
   );
 }
