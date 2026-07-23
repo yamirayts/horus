@@ -1,5 +1,6 @@
 import "./globals.css";
 import type { Metadata } from "next";
+import Navegacion from "./components/Navegacion";
 
 export const metadata: Metadata = {
   title: "Registro de uso — Equipamiento UCI",
@@ -9,7 +10,10 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="es">
-      <body className="min-h-screen bg-gray-50 text-gray-900">{children}</body>
+      <body className="min-h-screen bg-gray-50 text-gray-900">
+        <Navegacion />
+        {children}
+      </body>
     </html>
   );
 }
