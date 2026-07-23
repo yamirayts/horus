@@ -5,6 +5,7 @@ import { useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
 import type { Equipo } from "@/lib/db/equipos";
 import type { Accion } from "@/lib/alertas";
+import { ESCENARIO } from "@/lib/escenario";
 
 interface RespuestaConsulta {
   ok: boolean;
@@ -240,16 +241,21 @@ function ScanContent() {
         {accion === "activar" && (
           <div className="mt-5">
             <label htmlFor="ubicacion" className="block text-sm font-medium text-gray-700">
-              Cama / Ubicación
+              Cama
             </label>
-            <input
+            <select
               id="ubicacion"
-              type="text"
               value={ubicacion}
               onChange={(e) => setUbicacion(e.target.value)}
-              placeholder="Ej: Cama 7 (opcional)"
-              className="mt-1 w-full rounded border border-gray-300 px-3 py-2 text-base focus:border-gray-500 focus:outline-none"
-            />
+              className="mt-1 w-full rounded border border-gray-300 bg-white px-3 py-2 text-base focus:border-gray-500 focus:outline-none"
+            >
+              <option value="">— sin cama —</option>
+              {Array.from({ length: ESCENARIO.camas }, (_, i) => i + 1).map((n) => (
+                <option key={n} value={`Cama ${n}`}>
+                  Cama {n}
+                </option>
+              ))}
+            </select>
           </div>
         )}
 

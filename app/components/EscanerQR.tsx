@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { Html5Qrcode } from "html5-qrcode";
 import type { Equipo } from "@/lib/db/equipos";
 import type { Accion } from "@/lib/alertas";
+import { ESCENARIO } from "@/lib/escenario";
 
 const ELEMENT_ID = "lector-qr";
 const VENTANA_ANTIDOBLE_MS = 3000; // mismo id leído antes de este tiempo se ignora
@@ -460,16 +461,21 @@ export default function EscanerQR() {
                       htmlFor="ubi-activar"
                       className="block text-sm font-medium text-gray-200"
                     >
-                      Cama / Ubicación
+                      Cama
                     </label>
-                    <input
+                    <select
                       id="ubi-activar"
-                      type="text"
                       value={ubicacionActivar}
                       onChange={(e) => setUbicacionActivar(e.target.value)}
-                      placeholder="Ej: Cama 7 (opcional)"
-                      className="mt-1 w-full rounded border border-gray-500 bg-gray-900 px-3 py-2 text-base text-white placeholder-gray-500 focus:border-white focus:outline-none"
-                    />
+                      className="mt-1 w-full rounded border border-gray-500 bg-gray-900 px-3 py-2 text-base text-white focus:border-white focus:outline-none"
+                    >
+                      <option value="">— sin cama —</option>
+                      {Array.from({ length: ESCENARIO.camas }, (_, i) => i + 1).map((n) => (
+                        <option key={n} value={`Cama ${n}`}>
+                          Cama {n}
+                        </option>
+                      ))}
+                    </select>
                   </div>
                 )}
                 <button
