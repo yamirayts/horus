@@ -15,6 +15,7 @@ interface FormState {
   tipo: string;
   marca: string;
   modelo: string;
+  numero_serie: string;
   umbral_horas: string;
   pct_alerta: string;
   pct_vencido: string;
@@ -26,6 +27,7 @@ const ESTADO_INICIAL: FormState = {
   tipo: TIPOS[0].value,
   marca: "",
   modelo: "",
+  numero_serie: "",
   umbral_horas: "",
   pct_alerta: "0.8",
   pct_vencido: "1.0",
@@ -66,6 +68,7 @@ export default function AltaEquipoPage() {
           tipo: form.tipo,
           marca: form.marca || undefined,
           modelo: form.modelo || undefined,
+          numero_serie: form.numero_serie || undefined,
           umbral_horas: Number(form.umbral_horas),
           pct_alerta: form.pct_alerta ? Number(form.pct_alerta) : undefined,
           pct_vencido: form.pct_vencido ? Number(form.pct_vencido) : undefined,
@@ -164,6 +167,16 @@ export default function AltaEquipoPage() {
             />
           </label>
         </div>
+
+        <label className="text-sm">
+          Número de serie (opcional)
+          <input
+            value={form.numero_serie}
+            onChange={(e) => actualizar("numero_serie", e.target.value)}
+            placeholder="Del fabricante"
+            className="mt-1 w-full rounded border border-gray-300 px-2 py-2"
+          />
+        </label>
 
         <label className="text-sm">
           Umbral de horas (mantenimiento)

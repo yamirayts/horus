@@ -57,6 +57,20 @@ export default async function DetalleEquipoPage({ params }: DetalleEquipoPagePro
         ← Volver a equipos
       </Link>
 
+      {!equipo.activo && (
+        <div className="mb-4 rounded-lg border border-red-400 bg-red-100 p-4 text-red-900 print:hidden">
+          <p className="font-semibold">Equipo dado de baja</p>
+          <p className="text-sm">
+            {equipo.fecha_baja ? `Fecha: ${new Date(equipo.fecha_baja).toLocaleString("es-AR")}` : ""}
+            {equipo.motivo_baja ? ` · Motivo: ${equipo.motivo_baja}` : ""}
+          </p>
+          <p className="mt-1 text-sm">
+            No aparece en el tablero ni en el listado por defecto, y no puede escanearse.
+            El historial se conserva. Podés reactivarlo desde la zona de acciones críticas.
+          </p>
+        </div>
+      )}
+
       <div className="mb-4 flex flex-wrap items-start justify-between gap-2 print:hidden">
         <div>
           <h1 className="font-mono text-2xl font-bold">{equipo.id}</h1>
@@ -65,6 +79,9 @@ export default async function DetalleEquipoPage({ params }: DetalleEquipoPagePro
             {equipo.marca ? ` · ${equipo.marca}` : ""}
             {equipo.modelo ? ` ${equipo.modelo}` : ""}
           </p>
+          {equipo.numero_serie && (
+            <p className="text-sm text-gray-600">N° de serie: {equipo.numero_serie}</p>
+          )}
         </div>
         <span className="rounded-full bg-gray-100 px-3 py-1 text-sm font-semibold text-gray-700">
           {ETIQUETA_ESTADO[equipo.estado] ?? equipo.estado}
@@ -94,7 +111,17 @@ export default async function DetalleEquipoPage({ params }: DetalleEquipoPagePro
       </section>
 
       <div className="mb-4">
-        <EquipoAcciones equipoId={equipo.id} umbralHoras={umbral} pctAlerta={pctAlerta} pctVencido={pctVencido} />
+        <EquipoAcciones
+          equipoId={equipo.id}
+          umbralHoras={umbral}
+          pctAlerta={pctAlerta}
+          pctVencido={pctVencido}
+          marca={equipo.marca}
+          modelo={equipo.modelo}
+          numeroSerie={equipo.numero_serie}
+          activo={equipo.activo}
+          totalActividad={ciclos.length + mantenimientos.length + fallas.length + lecturasHorometro.length}
+        />
       </div>
 
       <section className="mb-4 rounded-lg border border-gray-200 bg-white p-4 print:hidden">

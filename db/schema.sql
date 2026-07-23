@@ -6,6 +6,7 @@ CREATE TABLE IF NOT EXISTS equipos (
   tipo              TEXT NOT NULL,                  -- 'bomba_infusion' | 'monitor' | 'ventilador'
   marca             TEXT,
   modelo            TEXT,
+  numero_serie      TEXT,                           -- N° de serie del fabricante (opcional)
   fecha_alta        DATE NOT NULL DEFAULT CURRENT_DATE,
   umbral_horas      INTEGER NOT NULL,               -- editable por equipo
   pct_alerta        NUMERIC(4,3) NOT NULL DEFAULT 0.800,  -- nivel aviso (amarillo)
@@ -13,7 +14,10 @@ CREATE TABLE IF NOT EXISTS equipos (
   horas_acumuladas  NUMERIC(10,2) NOT NULL DEFAULT 0,
   horas_iniciales   NUMERIC(10,2) NOT NULL DEFAULT 0,     -- uso previo cargado (transparencia)
   estado            TEXT NOT NULL DEFAULT 'disponible',   -- 'disponible' | 'en_uso' | 'mantenimiento'
-  ubicacion         TEXT                            -- cama/sector del equipo (NUNCA paciente)
+  ubicacion         TEXT,                           -- cama/sector del equipo (NUNCA paciente)
+  activo            BOOLEAN NOT NULL DEFAULT TRUE,  -- FALSE = baja lógica; sale de listas y tablero
+  fecha_baja        TIMESTAMPTZ,                    -- momento en que se dio de baja lógica
+  motivo_baja       TEXT                            -- motivo declarado por el usuario
 );
 
 CREATE TABLE IF NOT EXISTS ciclos_uso (

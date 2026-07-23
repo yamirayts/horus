@@ -19,18 +19,30 @@ const ESTADOS = [
   { value: "mantenimiento", label: "En mantenimiento" },
 ];
 
+const BAJA_OPCIONES = [
+  { value: "", label: "Solo activos" },
+  { value: "incluir", label: "Incluir dados de baja" },
+  { value: "solo", label: "Solo dados de baja" },
+];
+
 interface EquiposPageProps {
-  searchParams: { tipo?: string; estado?: string };
+  searchParams: { tipo?: string; estado?: string; baja?: string };
 }
 
 /**
- * Lista de equipos con filtros por tipo/estado (query params ?tipo=&estado=).
+ * Lista de equipos con filtros por tipo/estado/baja (query params).
  * El formulario de filtro usa method="get" plano: no necesita JS para actualizar la URL.
  */
 export default async function EquiposPage({ searchParams }: EquiposPageProps) {
   const tipo = searchParams.tipo || undefined;
   const estado = searchParams.estado || undefined;
-  const equipos = await listarEquipos({ tipo, estado });
+  const baja = searchParams.baja;
+  const equipos = await listarEquipos({
+    tipo,
+    estado,
+    incluirBajas: baja === "incluir",
+    soloBajas: baja === "solo",
+  });
 
   return (
     <main className="mx-auto max-w-5xl p-4">
@@ -64,10 +76,21 @@ export default async function EquiposPage({ searchParams }: EquiposPageProps) {
             </option>
           ))}
         </select>
+        <select
+          name="baja"
+          defaultValue={baja ?? ""}
+          className="rounded border border-gray-300 px-2 py-2 text-sm"
+        >
+          {BAJA_OPCIONES.map((o) => (
+            <option key={o.value} value={o.value}>
+              {o.label}
+            </option>
+          ))}
+        </select>
         <button type="submit" className="rounded bg-gray-200 px-3 py-2 text-sm font-semibold">
           Filtrar
         </button>
-        {(tipo || estado) && (
+        {(tipo || estado || baja) && (
           <Link href="/equipos" className="text-sm text-gray-600 underline">
             Limpiar filtros
           </Link>

@@ -618,7 +618,12 @@ function seccionResultados(): (Paragraph | Table)[] {
     ),
     parrafo(
       negro(
-        "Equipos: identificador único (codificado en el QR), tipo de equipo (campo de texto libre, lo que hace al sistema genérico frente a cualquier tipo de equipamiento, según se explicita en 4.5), marca, modelo, fecha de alta, umbral de horas para mantenimiento preventivo, porcentajes de aviso y de vencido, horas acumuladas, horas iniciales (uso previo real cargado al momento del alta, registrado de forma separada de las horas generadas por ciclos), estado (disponible, en uso o en mantenimiento) y ubicación (cama o sector, nunca el paciente).",
+        "Equipos: identificador único (codificado en el QR), tipo de equipo (campo de texto libre, lo que hace al sistema genérico frente a cualquier tipo de equipamiento, según se explicita en 4.5), marca, modelo, número de serie del fabricante, fecha de alta, umbral de horas para mantenimiento preventivo, porcentajes de aviso y de vencido, horas acumuladas, horas iniciales (uso previo real cargado al momento del alta, registrado de forma separada de las horas generadas por ciclos), estado (disponible, en uso o en mantenimiento), ubicación (cama o sector, nunca el paciente) y un indicador de baja lógica con su fecha y motivo.",
+      ),
+    ),
+    parrafo(
+      negro(
+        "El sistema contempla dos operaciones de eliminación con semánticas distintas. La baja lógica marca al equipo como inactivo y lo excluye de listados, tablero y escaneo, pero preserva todo su historial (ciclos, mantenimientos, fallas y lecturas de horómetro), lo que resulta consistente con la práctica de gestión hospitalaria de activos y con los requisitos de auditoría. La eliminación definitiva, en cambio, solo se habilita cuando el equipo no registra ninguna actividad, y se destina exclusivamente a corregir un alta errónea. Ambas operaciones requieren confirmación explícita en la interfaz.",
       ),
     ),
     parrafo(
@@ -646,6 +651,11 @@ function seccionResultados(): (Paragraph | Table)[] {
     parrafo(
       negro(
         "Al asignar un equipo, el personal de enfermería escanea el QR: la aplicación reconoce el equipo, abre un ciclo de uso con el timestamp de inicio y marca el equipo como “en uso”. Al retirarlo, un nuevo escaneo del mismo equipo cierra el ciclo, calcula las horas transcurridas, las suma a las horas acumuladas y vuelve a marcar el equipo como “disponible”. Un mismo escaneo funciona como conmutador (activa o desactiva según el estado). El registro de un mantenimiento reinicia las horas acumuladas. El tablero de control consulta estos datos y calcula los indicadores en tiempo real.",
+      ),
+    ),
+    parrafo(
+      negro(
+        "El código QR de cada equipo codifica una dirección web (URL) del propio sistema, que incluye el identificador del equipo como parámetro. Esta decisión permite dos flujos operativos complementarios. En el flujo casual, el personal apunta la cámara nativa del teléfono al QR y el sistema operativo del dispositivo ofrece abrir el enlace, lo que despliega directamente la pantalla de confirmación con el equipo identificado; no se requiere tener la aplicación previamente abierta. En el flujo de uso en cadena, el personal abre la aplicación y utiliza el escáner integrado, que reconoce el mismo formato de URL, extrae el identificador y permite realizar múltiples escaneos consecutivos sin salir de la aplicación. Ambos flujos comparten la misma pantalla de confirmación —con la ubicación de cama seleccionable de un desplegable acotado por el escenario de referencia—, con lo que la lógica de negocio y las validaciones son idénticas en ambos casos.",
       ),
     ),
 

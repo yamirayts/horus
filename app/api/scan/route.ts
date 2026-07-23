@@ -21,6 +21,12 @@ export async function GET(req: NextRequest) {
   if (!equipo) {
     return NextResponse.json({ ok: false, error: "equipo desconocido" }, { status: 404, headers: HEADERS_SIN_CACHE });
   }
+  if (!equipo.activo) {
+    return NextResponse.json(
+      { ok: false, error: "equipo dado de baja" },
+      { status: 410, headers: HEADERS_SIN_CACHE }
+    );
+  }
   return NextResponse.json(
     { ok: true, equipo, accion: decidirAccion(equipo.estado) },
     { headers: HEADERS_SIN_CACHE }
@@ -33,6 +39,7 @@ export async function POST(req: NextRequest) {
   if (!id) return NextResponse.json({ ok: false, error: "falta id" }, { status: 400 });
   const equipo = await getEquipo(id);
   if (!equipo) return NextResponse.json({ ok: false, error: "equipo desconocido" }, { status: 404 });
+  if (!equipo.activo) return NextResponse.json({ ok: false, error: "equipo dado de baja" }, { status: 410 });
   const accion = decidirAccion(equipo.estado);
   try {
     if (accion === "activar") {

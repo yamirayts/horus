@@ -1,12 +1,19 @@
 import { NextRequest, NextResponse } from "next/server";
 import { listarEquipos, crearEquipo } from "@/lib/db/equipos";
 
-// GET /api/equipos?tipo=&estado= — lista equipos con filtros opcionales.
+// GET /api/equipos?tipo=&estado=&baja= — lista equipos con filtros opcionales.
+// baja=incluir muestra activos + dados de baja. baja=solo muestra solo los dados de baja.
 export async function GET(req: NextRequest) {
   const tipo = req.nextUrl.searchParams.get("tipo") ?? undefined;
   const estado = req.nextUrl.searchParams.get("estado") ?? undefined;
+  const baja = req.nextUrl.searchParams.get("baja");
   try {
-    const equipos = await listarEquipos({ tipo, estado });
+    const equipos = await listarEquipos({
+      tipo,
+      estado,
+      incluirBajas: baja === "incluir",
+      soloBajas: baja === "solo",
+    });
     return NextResponse.json(equipos);
   } catch (e) {
     return NextResponse.json({ ok: false, error: (e as Error).message }, { status: 500 });
