@@ -46,6 +46,35 @@ interface FallaPendiente {
   ponerEnMantenimiento: boolean;
 }
 
+/**
+ * Detiene y limpia el escáner tragándose los errores de html5-qrcode, que puede
+ * lanzar excepciones síncronas cuando se pide stop en un estado inválido.
+ */
+function detenerYLimpiar(s: Html5Qrcode) {
+  const trag = (_: unknown) => undefined;
+  try {
+    const p = s.stop();
+    // stop() suele devolver Promise, pero por las dudas cubrimos ambos casos.
+    if (p && typeof (p as Promise<unknown>).then === "function") {
+      (p as Promise<unknown>).then(() => {
+        try {
+          s.clear();
+        } catch (e) {
+          trag(e);
+        }
+      }, trag);
+    } else {
+      try {
+        s.clear();
+      } catch (e) {
+        trag(e);
+      }
+    }
+  } catch (e) {
+    trag(e);
+  }
+}
+
 const ETIQUETA_ESTADO: Record<Equipo["estado"], string> = {
   disponible: "Disponible",
   en_uso: "En uso",
@@ -294,6 +323,7 @@ export default function EscanerQR() {
     const scanner = new Html5Qrcode(ELEMENT_ID);
     scannerRef.current = scanner;
     let cancelado = false;
+    let iniciado = false;
 
     scanner
       .start(
@@ -306,6 +336,11 @@ export default function EscanerQR() {
           // Errores de decodificación cuadro a cuadro (sin QR en foco): se ignoran.
         }
       )
+      .then(() => {
+        iniciado = true;
+        // Si el componente se desmontó mientras arrancábamos, detener ya mismo.
+        if (cancelado) detenerYLimpiar(scanner);
+      })
       .catch((err) => {
         console.error("No se pudo iniciar la cámara:", err);
       });
@@ -330,13 +365,10 @@ export default function EscanerQR() {
       window.clearInterval(intervalo);
       const s = scannerRef.current;
       scannerRef.current = null;
-      if (s) {
-        s.stop()
-          .then(() => s.clear())
-          .catch(() => {
-            // Si ya se detuvo o nunca llegó a iniciar, no hay nada que limpiar.
-          });
-      }
+      // Solo intentar detener si el escáner llegó a arrancar. Envolvemos en try
+      // porque html5-qrcode lanza excepciones síncronas (no promises) si el estado
+      // no permite stop.
+      if (s && iniciado) detenerYLimpiar(s);
     };
     // Solo se ejecuta al montar/desmontar: los callbacks usan refs, no estado cerrado.
     // eslint-disable-next-line react-hooks/exhaustive-deps
