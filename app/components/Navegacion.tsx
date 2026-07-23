@@ -24,7 +24,7 @@ export default function Navegacion() {
     href === "/" ? path === "/" : path.startsWith(href);
 
   return (
-    <nav className="bg-sky-700 text-white shadow-sm sticky top-0 z-40 print:hidden">
+    <nav className="bg-emerald-700 text-white shadow-sm sticky top-0 z-40 print:hidden">
       <div className="max-w-5xl mx-auto px-4">
         <div className="flex items-center justify-between h-14">
           <Link href="/" className="flex items-center gap-2 text-white hover:text-white/90">
@@ -32,7 +32,7 @@ export default function Navegacion() {
           </Link>
           <button
             type="button"
-            className="md:hidden p-2 -mr-2 rounded hover:bg-sky-600"
+            className="md:hidden p-2 -mr-2 rounded hover:bg-emerald-600"
             aria-label="Abrir menú"
             aria-expanded={abierto}
             onClick={() => setAbierto((v) => !v)}
@@ -48,8 +48,8 @@ export default function Navegacion() {
                   href={s.href}
                   className={`px-3 py-2 rounded text-sm font-medium transition-colors ${
                     esActiva(s.href)
-                      ? "bg-white text-sky-800"
-                      : "text-white/90 hover:bg-sky-600"
+                      ? "bg-white text-emerald-800"
+                      : "text-white/90 hover:bg-emerald-600"
                   }`}
                 >
                   {s.label}
@@ -67,8 +67,8 @@ export default function Navegacion() {
                   onClick={() => setAbierto(false)}
                   className={`block px-3 py-2 rounded text-sm font-medium ${
                     esActiva(s.href)
-                      ? "bg-white text-sky-800"
-                      : "text-white/90 hover:bg-sky-600"
+                      ? "bg-white text-emerald-800"
+                      : "text-white/90 hover:bg-emerald-600"
                   }`}
                 >
                   {s.label}

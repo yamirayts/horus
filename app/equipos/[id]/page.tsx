@@ -28,7 +28,7 @@ const ETIQUETA_ESTADO: Record<string, string> = {
 // Chip de color según el estado del equipo.
 const COLOR_ESTADO: Record<string, string> = {
   disponible: "bg-emerald-100 text-emerald-800",
-  en_uso: "bg-sky-100 text-sky-800",
+  en_uso: "bg-teal-100 text-teal-800",
   mantenimiento: "bg-amber-100 text-amber-800",
 };
 
@@ -89,7 +89,7 @@ export default async function DetalleEquipoPage({ params }: DetalleEquipoPagePro
       {/* Header: id, tipo, marca/modelo/serie, chip de estado. */}
       <header className="mb-5 flex flex-wrap items-start justify-between gap-3 print:hidden">
         <div>
-          <p className="text-sm font-medium text-sky-700">
+          <p className="text-sm font-medium text-emerald-700">
             {ETIQUETA_TIPO[equipo.tipo] ?? equipo.tipo}
           </p>
           <h1 className="font-mono text-3xl font-bold text-slate-900">{equipo.id}</h1>

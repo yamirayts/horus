@@ -105,7 +105,7 @@ export default function EquipoAcciones({
       {/* Registrar mantenimiento: resetea el contador de horas del equipo. */}
       <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm print:hidden">
         <div className="flex items-center gap-2">
-          <svg className="h-5 w-5 text-sky-700" viewBox="0 0 20 20" fill="currentColor" aria-hidden>
+          <svg className="h-5 w-5 text-emerald-700" viewBox="0 0 20 20" fill="currentColor" aria-hidden>
             <path d="M11.49 3.17a2.5 2.5 0 013.34 3.34l-9.19 9.2A2 2 0 014.22 16H3v-1.22c0-.53.21-1.04.59-1.41l9.2-9.2z" />
             <path d="M12.5 5l2.5 2.5" />
           </svg>
@@ -146,7 +146,7 @@ export default function EquipoAcciones({
           <button
             type="submit"
             disabled={mantEnviando}
-            className="rounded bg-sky-700 py-2 text-sm font-semibold text-white hover:bg-sky-800 disabled:opacity-50"
+            className="rounded bg-emerald-700 py-2 text-sm font-semibold text-white hover:bg-emerald-800 disabled:opacity-50"
           >
             {mantEnviando ? "Guardando…" : "Registrar mantenimiento"}
           </button>
@@ -161,7 +161,7 @@ export default function EquipoAcciones({
       {/* Editar umbral / porcentajes / marca / modelo / N° serie. */}
       <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm print:hidden">
         <div className="flex items-center gap-2">
-          <svg className="h-5 w-5 text-sky-700" viewBox="0 0 20 20" fill="currentColor" aria-hidden>
+          <svg className="h-5 w-5 text-emerald-700" viewBox="0 0 20 20" fill="currentColor" aria-hidden>
             <path
               fillRule="evenodd"
               d="M11.49 3.17a2.5 2.5 0 013.34 3.34l-9.19 9.2A2 2 0 014.22 16H3v-1.22c0-.53.21-1.04.59-1.41l9.2-9.2z"
@@ -238,7 +238,7 @@ export default function EquipoAcciones({
           <button
             type="submit"
             disabled={cfgEnviando}
-            className="rounded bg-sky-700 py-2 text-sm font-semibold text-white hover:bg-sky-800 disabled:opacity-50"
+            className="rounded bg-emerald-700 py-2 text-sm font-semibold text-white hover:bg-emerald-800 disabled:opacity-50"
           >
             {cfgEnviando ? "Guardando…" : "Guardar cambios"}
           </button>
@@ -254,7 +254,7 @@ export default function EquipoAcciones({
       <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm md:col-span-2 print:border-none print:p-0">
         <div className="mb-3 flex items-center justify-between print:hidden">
           <div className="flex items-center gap-2">
-            <svg className="h-5 w-5 text-sky-700" viewBox="0 0 20 20" fill="currentColor" aria-hidden>
+            <svg className="h-5 w-5 text-emerald-700" viewBox="0 0 20 20" fill="currentColor" aria-hidden>
               <path d="M3 3h6v6H3V3zm2 2v2h2V5H5zM11 3h6v6h-6V3zm2 2v2h2V5h-2zM3 11h6v6H3v-6zm2 2v2h2v-2H5zM13 11h1v1h-1v-1zM15 11h2v2h-2v-2zM11 13h1v1h-1v-1zM13 14h2v3h-2v-3zM16 15h1v2h-1v-2z" />
             </svg>
             <h2 className="font-semibold text-slate-900">Código QR</h2>
@@ -271,7 +271,7 @@ export default function EquipoAcciones({
               <button
                 type="button"
                 onClick={() => window.print()}
-                className="rounded bg-sky-700 px-3 py-2 text-sm font-semibold text-white hover:bg-sky-800"
+                className="rounded bg-emerald-700 px-3 py-2 text-sm font-semibold text-white hover:bg-emerald-800"
               >
                 Imprimir
               </button>

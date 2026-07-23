@@ -3,7 +3,7 @@
 export default function Logo({ className = "h-6 w-auto" }: { className?: string }) {
   return (
     <svg
-      viewBox="0 0 96 32"
+      viewBox="0 0 130 32"
       xmlns="http://www.w3.org/2000/svg"
       role="img"
       aria-label="horus"
@@ -18,10 +18,10 @@ export default function Logo({ className = "h-6 w-auto" }: { className?: string 
       </g>
       {/* Wordmark */}
       <text
-        x="54"
-        y="22"
+        x="56"
+        y="23"
         fontFamily="ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
-        fontSize="20"
+        fontSize="22"
         fontWeight="700"
         fill="currentColor"
         letterSpacing="0.5"
