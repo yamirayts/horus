@@ -123,6 +123,16 @@ function item(t: string): Paragraph {
   });
 }
 
+/** Ítem de lista con viñeta en verde: marcador de dato pendiente de completar. */
+function itemVerde(t: string): Paragraph {
+  return new Paragraph({
+    children: [new TextRun({ text: `•\t${t}`, color: VERDE, bold: true, font: "Times New Roman", size: 24 })],
+    alignment: AlignmentType.LEFT,
+    spacing: { line: 360, after: 100 },
+    indent: { left: 360, hanging: 360 },
+  });
+}
+
 /** Referencia bibliográfica: sangría francesa, no justificada. */
 function referencia(t: string): Paragraph {
   return new Paragraph({
@@ -204,8 +214,8 @@ function seccionResumen(): Paragraph[] {
       ),
     ),
     parrafo(
-      negro(
-        "Resultados: [los resultados cuantitativos de la prueba de concepto —tasa de lectura correcta de QR, exactitud de la acumulación de horas, comportamiento ante microcortes de red, latencia de sincronización y disparo correcto de alertas— se incorporan a este resumen al finalizar la ejecución del protocolo descripto en la metodología].",
+      verde(
+        "[COMPLETAR TRAS ETAPAS 2-4 — síntesis cuantitativa: tasa de lectura correcta del QR (X%), exactitud de la acumulación de horas (Y%), comportamiento ante microcortes de red (registros recuperados de N), disparo de alertas (Z/Z casos esperados).]",
       ),
     ),
     parrafo(
@@ -215,8 +225,8 @@ function seccionResumen(): Paragraph[] {
     ),
     titulo("Abstract", 2),
     parrafo(
-      negro(
-        "El resumen en inglés (Abstract) se incorporará al finalizar la ejecución del protocolo, con los resultados cuantitativos de la prueba de concepto.",
+      verde(
+        "[COMPLETAR — traducción al inglés del resumen actualizado, incluyendo cifras de resultados.]",
       ),
     ),
   ];
@@ -656,15 +666,45 @@ function seccionResultados(): (Paragraph | Table)[] {
 
     titulo("5.4.4. Prototipo desarrollado", 3),
     parrafo(
-      negro(
-        "[la descripción del prototipo efectivamente construido, las URLs del repositorio y de la aplicación desplegada, y las capturas de pantalla de la vista de escaneo, el detalle de un equipo y el tablero de control se incorporan a este apartado al finalizar el desarrollo].",
+      verde(
+        "[COMPLETAR — URL del repositorio público en GitHub, URL de la app desplegada en Vercel, y capturas de pantalla como Figuras 1-3: (a) pantalla de escaneo con confirmación de acción, (b) detalle de un equipo con horas acumuladas y contraste con horómetro, (c) tablero de control con alertas AMP y vencidos. Las imágenes se incorporan como figuras y no cuentan en la extensión.]",
       ),
     ),
 
     titulo("5.5. Resultados de la prueba de concepto", 2),
     parrafo(
       negro(
-        "La prueba de concepto se ejecuta conforme al protocolo de cuatro etapas descripto en la metodología (4.4, Fase 5). Los resultados obtenidos para cada etapa, así como la tabla resumen correspondiente, se incorporan a este apartado al finalizar la ejecución del protocolo.",
+        "La prueba de concepto se ejecuta conforme al protocolo de cuatro etapas descripto en la metodología (4.4, Fase 5). A continuación se presentan los resultados obtenidos en cada etapa.",
+      ),
+    ),
+    titulo("Etapa 1 — Montaje de la maqueta física", 3),
+    parrafo(
+      verde(
+        "[COMPLETAR — cantidad de gemelos etiquetados (aprox. 101), formato y tamaño de los QR utilizados (25x25 mm, corrección Q), muestra plastificada (aprox. 20), y observaciones del montaje del panel.]",
+      ),
+    ),
+    titulo("Etapa 2 — Protocolo de carga dinámica", 3),
+    parrafo(
+      verde(
+        "[COMPLETAR — total de escaneos ejecutados según el cronograma de 14 días (aprox. 294), duración del protocolo, tasa de lectura correcta del QR (lecturas exitosas / intentos), y observaciones bajo distintas condiciones de luz.]",
+      ),
+    ),
+    titulo("Etapa 3 — Infraestructura de red y persistencia", 3),
+    parrafo(
+      verde(
+        "[COMPLETAR — comportamiento ante microcortes de conectividad forzados (registros recuperados de N intentados), latencia de sincronización observada, y exactitud de la acumulación de horas (diferencia entre horas calculadas por el sistema y tiempo real transcurrido).]",
+      ),
+    ),
+    titulo("Etapa 4 — Prueba de stress y disparo de alertas", 3),
+    parrafo(
+      verde(
+        "[COMPLETAR — escenario de sobreuso simulado (equipo empujado sobre umbral desde /prueba), verificación del cálculo del indicador HAM, disparo de la alerta AMP al 80% del umbral (validación visual filmada), y demostración del cálculo del MTBF con fallas sintéticas (declaradas como tales, ver regla de honestidad).]",
+      ),
+    ),
+    titulo("Tabla resumen de resultados", 3),
+    parrafo(
+      verde(
+        "[COMPLETAR — tabla con columnas: indicador / valor esperado / valor obtenido / observación.]",
       ),
     ),
   ];
@@ -686,8 +726,8 @@ function seccionDiscusion(): (Paragraph | Table)[] {
       ),
     ),
     parrafo(
-      negro(
-        "La prueba de concepto aportará evidencia empírica adicional sobre esta dimensión, a partir de los resultados que se obtengan en las etapas 2 y 3 del protocolo (ver 4.4 y 5.5).",
+      verde(
+        "[COMPLETAR — confirmar, a partir de los resultados de las etapas 2 y 3, la tasa de lectura del QR obtenida y la tolerancia a cortes de red medida.]",
       ),
     ),
     titulo("6.1.2. Viabilidad operativa", 3),
@@ -735,8 +775,8 @@ function seccionDiscusion(): (Paragraph | Table)[] {
 
     titulo("6.3. Interpretación de los resultados", 2),
     parrafo(
-      negro(
-        "La interpretación de los resultados de la prueba de concepto a la luz de los objetivos planteados —el grado en que confirman la robustez de la infraestructura de datos y su relación con los antecedentes de la literatura citados en el marco teórico— se desarrolla en este apartado una vez finalizada la ejecución del protocolo descripto en 4.4.",
+      verde(
+        "[COMPLETAR — interpretación de los resultados de la prueba de concepto a la luz de los objetivos. Discutir en qué medida los resultados confirman la robustez de la infraestructura de datos, comparar los valores obtenidos con los esperados según el escenario de referencia SATI-Q, y relacionarlos con los precedentes de la literatura (ECLIPSE, Ma 2021, Alshamasneh 2021).]",
       ),
     ),
 
@@ -773,8 +813,8 @@ function seccionConclusiones(): Paragraph[] {
       "El diseño incluye indicadores alineados con la norma EN 15341:2019 que habilitan una gestión del mantenimiento basada en evidencia de uso: horas acumuladas, alertas de mantenimiento próximo, tasa de uso, disponibilidad, historial, proyección y tiempo medio entre fallas.",
     ),
     item("El prototipo demuestra que el sistema puede construirse con tecnología accesible, de bajo costo y de acceso abierto, sin infraestructura especializada."),
-    item(
-      "La conclusión sobre el grado de validación de la robustez técnica de la infraestructura de datos —captura, red y persistencia, exactitud de la acumulación de horas y disparo de alertas— se incorpora a este apartado una vez finalizada la prueba de concepto.",
+    itemVerde(
+      "[COMPLETAR — conclusión sobre los resultados de la prueba de concepto: en qué medida se validó la robustez técnica de la infraestructura de datos (captura por QR, tolerancia a red/persistencia, exactitud de acumulación y disparo de alertas), con las cifras cuantitativas resumen.]",
     ),
     item(
       "El análisis de viabilidad indica que no existen barreras técnicas, operativas ni normativas insalvables para una eventual implementación; el factor crítico identificado es la adherencia del personal al registro, abordable mediante estrategias de sensibilización.",
@@ -845,8 +885,8 @@ function seccionAnexos(): Paragraph[] {
     item("Ubicación: zona visible, no sujeta a fricción frecuente, cerca del panel de control."),
     titulo("Anexo D — Protocolo detallado de la prueba de concepto", 2),
     parrafo(
-      negro(
-        "El protocolo detallado efectivamente ejecutado —listado de “gemelos” y sus QR, cronograma del protocolo de carga, planilla de registro de escaneos, escenarios de corte de red y de stress, y planilla de resultados por etapa— se incorpora a este anexo al finalizar la prueba de concepto.",
+      verde(
+        "[COMPLETAR — protocolo detallado efectivamente ejecutado: lista de gemelos y sus QR, cronograma de carga (referenciar cronograma.md), planilla de registro de escaneos completada (planilla-registro.csv), escenarios de corte de red y de stress ejecutados, y planilla de resultados por etapa.]",
       ),
     ),
   ];
