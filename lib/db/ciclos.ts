@@ -1,3 +1,4 @@
+import postgres from "postgres";
 import { sql } from "./client";
 import { calcularHorasCiclo } from "@/lib/horas";
 
@@ -17,15 +18,31 @@ export async function abrirCiclo(
   });
 }
 
+/**
+ * Cierra el ciclo abierto de un equipo (si existe) DENTRO de una transacción ya iniciada
+ * por el llamador. No toca el estado del equipo — eso queda a criterio de quien invoca,
+ * porque el destino tras cerrar el ciclo varía (disponible, mantenimiento, etc).
+ * Devuelve las horas del ciclo cerrado, o null si el equipo no tenía ciclo abierto.
+ * Compartida por cerrarCicloAbierto, registrarFalla y registrarMantenimiento para no
+ * duplicar el SQL de cierre.
+ */
+export async function cerrarCicloAbiertoTx(
+  tx: postgres.TransactionSql, equipoId: string, fin: Date = new Date()
+): Promise<number | null> {
+  const abiertos = await tx<{ id: number; inicio: Date }[]>`
+    SELECT id, inicio FROM ciclos_uso WHERE equipo_id = ${equipoId} AND fin IS NULL
+    ORDER BY inicio DESC LIMIT 1`;
+  if (abiertos.length === 0) return null;
+  const c = abiertos[0];
+  const horas = calcularHorasCiclo(new Date(c.inicio), fin);
+  await tx`UPDATE ciclos_uso SET fin = ${fin}, horas_ciclo = ${horas} WHERE id = ${c.id}`;
+  return horas;
+}
+
 export async function cerrarCicloAbierto(equipoId: string, fin: Date = new Date()): Promise<number> {
   return sql.begin(async (tx) => {
-    const abiertos = await tx<{ id: number; inicio: Date }[]>`
-      SELECT id, inicio FROM ciclos_uso WHERE equipo_id = ${equipoId} AND fin IS NULL
-      ORDER BY inicio DESC LIMIT 1`;
-    if (abiertos.length === 0) throw new Error(`Equipo ${equipoId} no tiene ciclo abierto`);
-    const c = abiertos[0];
-    const horas = calcularHorasCiclo(new Date(c.inicio), fin);
-    await tx`UPDATE ciclos_uso SET fin = ${fin}, horas_ciclo = ${horas} WHERE id = ${c.id}`;
+    const horas = await cerrarCicloAbiertoTx(tx, equipoId, fin);
+    if (horas === null) throw new Error(`Equipo ${equipoId} no tiene ciclo abierto`);
     await tx`UPDATE equipos SET estado = 'disponible',
              horas_acumuladas = horas_acumuladas + ${horas} WHERE id = ${equipoId}`;
     return horas;
