@@ -6,3 +6,4 @@ node_modules/
 *.log
 next-env.d.ts
 *.tsbuildinfo
+tfi/
