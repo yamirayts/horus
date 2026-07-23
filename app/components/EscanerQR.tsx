@@ -101,6 +101,10 @@ export default function EscanerQR() {
 
   // Mini-formulario de reporte de falla: solo se abre con un equipo ya identificado (tarjeta abierta).
   const [modalFalla, setModalFalla] = useState<{ equipoId: string } | null>(null);
+
+  // Cama / ubicación que se envía al activar. Se rellena con la ubicación previa
+  // del equipo cuando aparece la tarjeta, y el enfermero puede editarla.
+  const [ubicacionActivar, setUbicacionActivar] = useState("");
   const [tipoFalla, setTipoFalla] = useState(TIPOS_FALLA[0].value);
   const [descripcionFalla, setDescripcionFalla] = useState("");
   const [ponerEnMantenimiento, setPonerEnMantenimiento] = useState(true);
@@ -128,12 +132,15 @@ export default function EscanerQR() {
 
   // Ejecuta el toggle en el backend. Distingue error de red (reintentable/encolable)
   // de error de aplicación (equipo desconocido, en mantenimiento: no se reintenta).
-  async function enviarEscaneo(id: string, intento = 1): Promise<void> {
+  async function enviarEscaneo(id: string, intento = 1, ubicacion?: string): Promise<void> {
     try {
+      const body: { id: string; ubicacion?: string } = { id };
+      // La ubicación solo se envía al activar (relevante para asignar la cama).
+      if (ubicacion && ubicacion.trim()) body.ubicacion = ubicacion.trim();
       const res = await fetch("/api/scan", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id }),
+        body: JSON.stringify(body),
       });
       const data: RespuestaScan = await res.json();
 
@@ -158,7 +165,7 @@ export default function EscanerQR() {
       // Falla de red (no hubo respuesta): reintentar una vez a los 1500 ms.
       if (intento === 1) {
         setTimeout(() => {
-          void enviarEscaneo(id, 2);
+          void enviarEscaneo(id, 2, ubicacion);
         }, REINTENTO_MS);
         return;
       }
@@ -207,12 +214,14 @@ export default function EscanerQR() {
   // Paso 1: consulta el equipo (sin efectos secundarios) y arma la tarjeta de confirmación.
   async function consultarEquipo(id: string): Promise<void> {
     try {
-      const res = await fetch(`/api/scan?id=${encodeURIComponent(id)}`);
+      const res = await fetch(`/api/scan?id=${encodeURIComponent(id)}`, { cache: "no-store" });
       const data: RespuestaConsulta = await res.json();
       if (!data.ok || !data.equipo || !data.accion) {
         setEstado({ tipo: "tarjeta_error", mensaje: data.error ?? "equipo desconocido" });
         return;
       }
+      // Precargar la ubicación previa del equipo para editarla al activar.
+      setUbicacionActivar(data.equipo.ubicacion ?? "");
       setEstado({ tipo: "tarjeta", id, equipo: data.equipo, accion: data.accion });
     } catch {
       setEstado({ tipo: "tarjeta_error", mensaje: "no se pudo consultar el equipo" });
@@ -220,9 +229,11 @@ export default function EscanerQR() {
   }
 
   // Paso 2: el enfermero tocó el botón grande de la tarjeta -> recién ahí se ejecuta el toggle.
-  function confirmarAccion(id: string) {
+  function confirmarAccion(id: string, accion: Accion) {
     setEstado({ tipo: "enviando" });
-    void enviarEscaneo(id);
+    // La ubicación solo aplica al activar; al desactivar no se pisa.
+    const ubi = accion === "activar" ? ubicacionActivar : undefined;
+    void enviarEscaneo(id, 1, ubi);
   }
 
   // Abre el mini-formulario de falla con el equipo ya identificado por la tarjeta.
@@ -442,15 +453,35 @@ export default function EscanerQR() {
                 <span className="text-sm font-normal">No se puede registrar uso</span>
               </button>
             ) : (
-              <button
-                type="button"
-                onClick={() => confirmarAccion(estado.id)}
-                className={`w-full max-w-xs rounded-xl py-10 text-3xl font-extrabold text-white shadow-lg active:scale-95 ${
-                  estado.accion === "activar" ? "bg-green-600" : "bg-orange-600"
-                }`}
-              >
-                {estado.accion === "activar" ? "ACTIVAR" : "DESACTIVAR"}
-              </button>
+              <>
+                {estado.accion === "activar" && (
+                  <div className="w-full max-w-xs text-left">
+                    <label
+                      htmlFor="ubi-activar"
+                      className="block text-sm font-medium text-gray-200"
+                    >
+                      Cama / Ubicación
+                    </label>
+                    <input
+                      id="ubi-activar"
+                      type="text"
+                      value={ubicacionActivar}
+                      onChange={(e) => setUbicacionActivar(e.target.value)}
+                      placeholder="Ej: Cama 7 (opcional)"
+                      className="mt-1 w-full rounded border border-gray-500 bg-gray-900 px-3 py-2 text-base text-white placeholder-gray-500 focus:border-white focus:outline-none"
+                    />
+                  </div>
+                )}
+                <button
+                  type="button"
+                  onClick={() => confirmarAccion(estado.id, estado.accion)}
+                  className={`w-full max-w-xs rounded-xl py-10 text-3xl font-extrabold text-white shadow-lg active:scale-95 ${
+                    estado.accion === "activar" ? "bg-green-600" : "bg-orange-600"
+                  }`}
+                >
+                  {estado.accion === "activar" ? "ACTIVAR" : "DESACTIVAR"}
+                </button>
+              </>
             )}
 
             <div className="flex gap-3">
