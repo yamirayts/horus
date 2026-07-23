@@ -304,19 +304,35 @@ export default function EscanerQR() {
   }
 
   // Callback de lectura exitosa del lector QR.
+  /**
+   * Extrae el id de equipo del texto decodificado. Acepta tanto el id crudo
+   * (ej. "BIC-014") como una URL de la app (ej. "https://.../scan?id=BIC-014").
+   */
+  function extraerId(texto: string): string {
+    try {
+      const u = new URL(texto);
+      const idParam = u.searchParams.get("id");
+      if (idParam) return idParam;
+    } catch {
+      // No es una URL válida: asumir que ya es el id crudo.
+    }
+    return texto;
+  }
+
   function alLeerCodigo(textoDecodificado: string) {
     if (procesandoRef.current) return;
+    const id = extraerId(textoDecodificado);
     const ahora = Date.now();
     const ultimo = ultimoRef.current;
     // Anti-doble-lectura: mismo id leído hace menos de 3000 ms se ignora.
-    if (ultimo && ultimo.id === textoDecodificado && ahora - ultimo.ts < VENTANA_ANTIDOBLE_MS) {
+    if (ultimo && ultimo.id === id && ahora - ultimo.ts < VENTANA_ANTIDOBLE_MS) {
       return;
     }
-    ultimoRef.current = { id: textoDecodificado, ts: ahora };
+    ultimoRef.current = { id, ts: ahora };
     procesandoRef.current = true;
     setEstado({ tipo: "consultando" });
     scannerRef.current?.pause();
-    void consultarEquipo(textoDecodificado);
+    void consultarEquipo(id);
   }
 
   useEffect(() => {

@@ -19,7 +19,11 @@ export default function QRImprimible({ id }: QRImprimibleProps) {
     let cancelado = false;
     setDataUrl(null);
     setError(null);
-    QRCode.toDataURL(id, { errorCorrectionLevel: "Q", margin: 1 })
+    // El QR codifica una URL absoluta a /scan?id=<ID> del propio despliegue.
+    // Así se puede escanear con la cámara nativa del celular y abre la app
+    // directamente sin necesidad de tenerla abierta primero.
+    const contenido = `${window.location.origin}/scan?id=${encodeURIComponent(id)}`;
+    QRCode.toDataURL(contenido, { errorCorrectionLevel: "Q", margin: 1 })
       .then((url) => {
         if (!cancelado) setDataUrl(url);
       })
