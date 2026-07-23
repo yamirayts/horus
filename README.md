@@ -54,7 +54,7 @@ El TFI, en cambio, acota su validación a tres tipos de equipo de cama de alto u
 
 1. Copiar `.env.example` a `.env.local`.
 2. Completar `DATABASE_URL` con el valor copiado de Neon.
-3. Opcionalmente, completar `TABLERO_PIN` si se quiere exigir un PIN para acceder al tablero (dejar vacío para no exigirlo).
+3. El tablero (`/tablero`) es público en esta versión: no requiere PIN ni login. No expone datos sensibles de pacientes, solo estado y horas de uso del equipamiento — está fuera de los objetivos de este TFI.
 
 ### 3. Desarrollo local
 
@@ -72,7 +72,7 @@ Subir el repositorio a GitHub como público, con licencia MIT (ver `LICENSE`).
 ### 5. Deploy en Vercel
 
 1. Importar el repositorio de GitHub en [Vercel](https://vercel.com).
-2. Configurar las variables de entorno del proyecto: `DATABASE_URL` (y `TABLERO_PIN` si se usa).
+2. Configurar la variable de entorno del proyecto: `DATABASE_URL`.
 3. Ejecutar el deploy.
 
 ### 6. Acceso

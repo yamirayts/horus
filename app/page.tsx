@@ -1,8 +1,8 @@
 import EscanerQR from "@/app/components/EscanerQR";
 
 // Pantalla principal: escaneo QR a pantalla completa, mobile-first y sin pasos intermedios.
-// No depende de TABLERO_PIN: esa protección es solo para el tablero de gestión (Fase 2),
-// el escaneo debe quedar siempre accesible y rápido para el personal.
+// Queda siempre accesible y rápida para el personal, sin autenticación (igual que /tablero,
+// que en esta versión es público — ver README).
 export default function Home() {
   return (
     <main className="relative h-dvh w-full overflow-hidden">
