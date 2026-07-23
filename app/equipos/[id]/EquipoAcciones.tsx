@@ -12,20 +12,18 @@ interface EquipoAccionesProps {
   marca: string | null;
   modelo: string | null;
   numeroSerie: string | null;
-  activo: boolean;
-  totalActividad: number;
 }
 
 type Mensaje = { tipo: "ok" | "error"; texto: string } | null;
 
 /**
  * Sección interactiva del detalle de un equipo: registrar mantenimiento,
- * editar umbral/porcentajes de alerta, y ver/imprimir el QR.
- * Componente cliente porque envía POST/PATCH y refresca los datos del server component.
+ * editar umbral/porcentajes/marca/modelo/serie, y ver/imprimir el QR.
+ * La zona de acciones críticas (baja / eliminación) vive en un componente aparte
+ * (ZonaAccionesCriticas) que se renderiza al final de la página.
  */
 export default function EquipoAcciones({
-  equipoId, umbralHoras, pctAlerta, pctVencido,
-  marca, modelo, numeroSerie, activo, totalActividad,
+  equipoId, umbralHoras, pctAlerta, pctVencido, marca, modelo, numeroSerie,
 }: EquipoAccionesProps) {
   const router = useRouter();
 
@@ -45,12 +43,6 @@ export default function EquipoAcciones({
   const [cfgMensaje, setCfgMensaje] = useState<Mensaje>(null);
 
   const [mostrarQR, setMostrarQR] = useState(false);
-
-  // Zona de peligro: baja lógica / reactivar / eliminar definitivo.
-  const [motivoBaja, setMotivoBaja] = useState("");
-  const [confirmarBorrado, setConfirmarBorrado] = useState("");
-  const [zonaEnviando, setZonaEnviando] = useState(false);
-  const [zonaMensaje, setZonaMensaje] = useState<Mensaje>(null);
 
   async function registrarMantenimiento(ev: FormEvent) {
     ev.preventDefault();
@@ -111,15 +103,22 @@ export default function EquipoAcciones({
   return (
     <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
       {/* Registrar mantenimiento: resetea el contador de horas del equipo. */}
-      <section className="rounded-lg border border-gray-200 bg-white p-4 print:hidden">
-        <h2 className="mb-3 font-semibold">Registrar mantenimiento</h2>
-        <form onSubmit={registrarMantenimiento} className="flex flex-col gap-3">
+      <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm print:hidden">
+        <div className="flex items-center gap-2">
+          <svg className="h-5 w-5 text-sky-700" viewBox="0 0 20 20" fill="currentColor" aria-hidden>
+            <path d="M11.49 3.17a2.5 2.5 0 013.34 3.34l-9.19 9.2A2 2 0 014.22 16H3v-1.22c0-.53.21-1.04.59-1.41l9.2-9.2z" />
+            <path d="M12.5 5l2.5 2.5" />
+          </svg>
+          <h2 className="font-semibold text-slate-900">Registrar mantenimiento</h2>
+        </div>
+        <p className="mt-1 text-xs text-slate-500">Al registrar, el contador de horas se reinicia a 0.</p>
+        <form onSubmit={registrarMantenimiento} className="mt-3 flex flex-col gap-3">
           <label className="text-sm">
             Tipo
             <select
               value={mantTipo}
               onChange={(e) => setMantTipo(e.target.value)}
-              className="mt-1 w-full rounded border border-gray-300 px-2 py-2"
+              className="mt-1 w-full rounded border border-slate-300 px-2 py-2"
             >
               <option value="preventivo">Preventivo</option>
               <option value="correctivo">Correctivo</option>
@@ -131,7 +130,7 @@ export default function EquipoAcciones({
               value={mantTecnico}
               onChange={(e) => setMantTecnico(e.target.value)}
               placeholder="Nombre del técnico (opcional)"
-              className="mt-1 w-full rounded border border-gray-300 px-2 py-2"
+              className="mt-1 w-full rounded border border-slate-300 px-2 py-2"
             />
           </label>
           <label className="text-sm">
@@ -141,31 +140,37 @@ export default function EquipoAcciones({
               onChange={(e) => setMantDescripcion(e.target.value)}
               placeholder="Detalle del trabajo realizado (opcional)"
               rows={2}
-              className="mt-1 w-full rounded border border-gray-300 px-2 py-2"
+              className="mt-1 w-full rounded border border-slate-300 px-2 py-2"
             />
           </label>
-          <p className="text-xs text-gray-500">
-            Al registrar, el contador de horas acumuladas del equipo vuelve a cero.
-          </p>
           <button
             type="submit"
             disabled={mantEnviando}
-            className="rounded bg-gray-900 py-2 text-sm font-semibold text-white disabled:opacity-50"
+            className="rounded bg-sky-700 py-2 text-sm font-semibold text-white hover:bg-sky-800 disabled:opacity-50"
           >
             {mantEnviando ? "Guardando…" : "Registrar mantenimiento"}
           </button>
           {mantMensaje && (
-            <p className={mantMensaje.tipo === "ok" ? "text-sm text-green-700" : "text-sm text-red-600"}>
+            <p className={mantMensaje.tipo === "ok" ? "text-sm text-emerald-700" : "text-sm text-red-600"}>
               {mantMensaje.texto}
             </p>
           )}
         </form>
       </section>
 
-      {/* Editar umbral / porcentajes de alerta y vencido. */}
-      <section className="rounded-lg border border-gray-200 bg-white p-4 print:hidden">
-        <h2 className="mb-3 font-semibold">Editar umbral / % de alerta</h2>
-        <form onSubmit={guardarConfig} className="flex flex-col gap-3">
+      {/* Editar umbral / porcentajes / marca / modelo / N° serie. */}
+      <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm print:hidden">
+        <div className="flex items-center gap-2">
+          <svg className="h-5 w-5 text-sky-700" viewBox="0 0 20 20" fill="currentColor" aria-hidden>
+            <path
+              fillRule="evenodd"
+              d="M11.49 3.17a2.5 2.5 0 013.34 3.34l-9.19 9.2A2 2 0 014.22 16H3v-1.22c0-.53.21-1.04.59-1.41l9.2-9.2z"
+              clipRule="evenodd"
+            />
+          </svg>
+          <h2 className="font-semibold text-slate-900">Editar configuración</h2>
+        </div>
+        <form onSubmit={guardarConfig} className="mt-3 flex flex-col gap-3">
           <label className="text-sm">
             Umbral (horas)
             <input
@@ -174,40 +179,42 @@ export default function EquipoAcciones({
               step={1}
               value={cfgUmbral}
               onChange={(e) => setCfgUmbral(e.target.value)}
-              className="mt-1 w-full rounded border border-gray-300 px-2 py-2"
+              className="mt-1 w-full rounded border border-slate-300 px-2 py-2"
             />
           </label>
-          <label className="text-sm">
-            % aviso (fracción, ej. 0.8 = 80%)
-            <input
-              type="number"
-              min={0}
-              max={2}
-              step={0.01}
-              value={cfgAlerta}
-              onChange={(e) => setCfgAlerta(e.target.value)}
-              className="mt-1 w-full rounded border border-gray-300 px-2 py-2"
-            />
-          </label>
-          <label className="text-sm">
-            % vencido (fracción, ej. 1.0 = 100%)
-            <input
-              type="number"
-              min={0}
-              max={2}
-              step={0.01}
-              value={cfgVencido}
-              onChange={(e) => setCfgVencido(e.target.value)}
-              className="mt-1 w-full rounded border border-gray-300 px-2 py-2"
-            />
-          </label>
-          <div className="mt-2 grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-2 gap-3">
+            <label className="text-sm">
+              % aviso (0.8 = 80%)
+              <input
+                type="number"
+                min={0}
+                max={2}
+                step={0.01}
+                value={cfgAlerta}
+                onChange={(e) => setCfgAlerta(e.target.value)}
+                className="mt-1 w-full rounded border border-slate-300 px-2 py-2"
+              />
+            </label>
+            <label className="text-sm">
+              % vencido (1.0 = 100%)
+              <input
+                type="number"
+                min={0}
+                max={2}
+                step={0.01}
+                value={cfgVencido}
+                onChange={(e) => setCfgVencido(e.target.value)}
+                className="mt-1 w-full rounded border border-slate-300 px-2 py-2"
+              />
+            </label>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
             <label className="text-sm">
               Marca
               <input
                 value={cfgMarca}
                 onChange={(e) => setCfgMarca(e.target.value)}
-                className="mt-1 w-full rounded border border-gray-300 px-2 py-2"
+                className="mt-1 w-full rounded border border-slate-300 px-2 py-2"
               />
             </label>
             <label className="text-sm">
@@ -215,7 +222,7 @@ export default function EquipoAcciones({
               <input
                 value={cfgModelo}
                 onChange={(e) => setCfgModelo(e.target.value)}
-                className="mt-1 w-full rounded border border-gray-300 px-2 py-2"
+                className="mt-1 w-full rounded border border-slate-300 px-2 py-2"
               />
             </label>
           </div>
@@ -225,18 +232,18 @@ export default function EquipoAcciones({
               value={cfgSerie}
               onChange={(e) => setCfgSerie(e.target.value)}
               placeholder="Del fabricante"
-              className="mt-1 w-full rounded border border-gray-300 px-2 py-2"
+              className="mt-1 w-full rounded border border-slate-300 px-2 py-2"
             />
           </label>
           <button
             type="submit"
             disabled={cfgEnviando}
-            className="rounded bg-gray-900 py-2 text-sm font-semibold text-white disabled:opacity-50"
+            className="rounded bg-sky-700 py-2 text-sm font-semibold text-white hover:bg-sky-800 disabled:opacity-50"
           >
             {cfgEnviando ? "Guardando…" : "Guardar cambios"}
           </button>
           {cfgMensaje && (
-            <p className={cfgMensaje.tipo === "ok" ? "text-sm text-green-700" : "text-sm text-red-600"}>
+            <p className={cfgMensaje.tipo === "ok" ? "text-sm text-emerald-700" : "text-sm text-red-600"}>
               {cfgMensaje.texto}
             </p>
           )}
@@ -244,14 +251,19 @@ export default function EquipoAcciones({
       </section>
 
       {/* QR imprimible: es la única sección que queda visible al imprimir. */}
-      <section className="rounded-lg border border-gray-200 bg-white p-4 md:col-span-2 print:border-none print:p-0">
+      <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm md:col-span-2 print:border-none print:p-0">
         <div className="mb-3 flex items-center justify-between print:hidden">
-          <h2 className="font-semibold">Código QR</h2>
+          <div className="flex items-center gap-2">
+            <svg className="h-5 w-5 text-sky-700" viewBox="0 0 20 20" fill="currentColor" aria-hidden>
+              <path d="M3 3h6v6H3V3zm2 2v2h2V5H5zM11 3h6v6h-6V3zm2 2v2h2V5h-2zM3 11h6v6H3v-6zm2 2v2h2v-2H5zM13 11h1v1h-1v-1zM15 11h2v2h-2v-2zM11 13h1v1h-1v-1zM13 14h2v3h-2v-3zM16 15h1v2h-1v-2z" />
+            </svg>
+            <h2 className="font-semibold text-slate-900">Código QR</h2>
+          </div>
           <div className="flex gap-2">
             <button
               type="button"
               onClick={() => setMostrarQR((v) => !v)}
-              className="rounded border border-gray-300 px-3 py-2 text-sm font-semibold"
+              className="rounded border border-slate-300 px-3 py-2 text-sm font-semibold hover:bg-slate-50"
             >
               {mostrarQR ? "Ocultar QR" : "Ver/Imprimir QR"}
             </button>
@@ -259,7 +271,7 @@ export default function EquipoAcciones({
               <button
                 type="button"
                 onClick={() => window.print()}
-                className="rounded bg-gray-900 px-3 py-2 text-sm font-semibold text-white"
+                className="rounded bg-sky-700 px-3 py-2 text-sm font-semibold text-white hover:bg-sky-800"
               >
                 Imprimir
               </button>
@@ -267,138 +279,6 @@ export default function EquipoAcciones({
           </div>
         </div>
         {mostrarQR && <QRImprimible id={equipoId} />}
-      </section>
-
-      {/* Zona de peligro: baja lógica, reactivación, eliminación definitiva. */}
-      <section className="rounded-lg border border-red-300 bg-red-50 p-4 md:col-span-2 print:hidden">
-        <h2 className="mb-1 font-semibold text-red-800">Zona de acciones críticas</h2>
-        <p className="mb-3 text-xs text-red-700">
-          La baja lógica preserva el historial (recomendado para equipos fuera de servicio).
-          La eliminación definitiva solo se permite cuando el equipo no tiene actividad registrada
-          (0 ciclos, 0 mantenimientos, 0 fallas, 0 lecturas).
-        </p>
-
-        {activo ? (
-          <div className="mb-4">
-            <label className="text-sm">
-              Motivo de baja (opcional)
-              <input
-                value={motivoBaja}
-                onChange={(e) => setMotivoBaja(e.target.value)}
-                placeholder="Ej: baja definitiva por rotura irrecuperable"
-                className="mt-1 w-full rounded border border-red-300 bg-white px-2 py-2"
-              />
-            </label>
-            <button
-              type="button"
-              disabled={zonaEnviando}
-              onClick={async () => {
-                if (!confirm(`¿Dar de baja lógica al equipo ${equipoId}? El historial queda preservado y se puede reactivar.`)) return;
-                setZonaEnviando(true);
-                setZonaMensaje(null);
-                try {
-                  const res = await fetch(`/api/equipos/${encodeURIComponent(equipoId)}`, {
-                    method: "PATCH",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ accion: "baja", motivo: motivoBaja || undefined }),
-                  });
-                  const data = await res.json();
-                  if (!data.ok) throw new Error(data.error ?? "no se pudo dar de baja");
-                  setZonaMensaje({ tipo: "ok", texto: "Equipo dado de baja." });
-                  router.refresh();
-                } catch (e) {
-                  setZonaMensaje({ tipo: "error", texto: (e as Error).message });
-                } finally {
-                  setZonaEnviando(false);
-                }
-              }}
-              className="mt-2 rounded bg-red-700 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
-            >
-              Dar de baja (con historial)
-            </button>
-          </div>
-        ) : (
-          <div className="mb-4">
-            <p className="mb-2 text-sm text-red-800">Este equipo está actualmente dado de baja.</p>
-            <button
-              type="button"
-              disabled={zonaEnviando}
-              onClick={async () => {
-                if (!confirm(`¿Reactivar el equipo ${equipoId}? Volverá a aparecer en el tablero y podrá escanearse.`)) return;
-                setZonaEnviando(true);
-                setZonaMensaje(null);
-                try {
-                  const res = await fetch(`/api/equipos/${encodeURIComponent(equipoId)}`, {
-                    method: "PATCH",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ accion: "reactivar" }),
-                  });
-                  const data = await res.json();
-                  if (!data.ok) throw new Error(data.error ?? "no se pudo reactivar");
-                  setZonaMensaje({ tipo: "ok", texto: "Equipo reactivado." });
-                  router.refresh();
-                } catch (e) {
-                  setZonaMensaje({ tipo: "error", texto: (e as Error).message });
-                } finally {
-                  setZonaEnviando(false);
-                }
-              }}
-              className="rounded bg-green-700 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
-            >
-              Reactivar equipo
-            </button>
-          </div>
-        )}
-
-        <div className="border-t border-red-300 pt-3">
-          <p className="text-sm text-red-800">
-            Eliminación definitiva —{" "}
-            {totalActividad === 0
-              ? "sin actividad registrada, se puede eliminar."
-              : `bloqueada (el equipo tiene ${totalActividad} registros históricos).`}
-          </p>
-          {totalActividad === 0 && (
-            <>
-              <label className="mt-2 block text-sm text-red-800">
-                Escribí el id <span className="font-mono font-bold">{equipoId}</span> para confirmar.
-                <input
-                  value={confirmarBorrado}
-                  onChange={(e) => setConfirmarBorrado(e.target.value)}
-                  className="mt-1 w-full rounded border border-red-400 bg-white px-2 py-2 font-mono"
-                />
-              </label>
-              <button
-                type="button"
-                disabled={zonaEnviando || confirmarBorrado !== equipoId}
-                onClick={async () => {
-                  setZonaEnviando(true);
-                  setZonaMensaje(null);
-                  try {
-                    const res = await fetch(`/api/equipos/${encodeURIComponent(equipoId)}`, {
-                      method: "DELETE",
-                    });
-                    const data = await res.json();
-                    if (!data.ok) throw new Error(data.error ?? "no se pudo eliminar");
-                    // Redirige a la lista general — el equipo ya no existe.
-                    router.push("/equipos");
-                  } catch (e) {
-                    setZonaMensaje({ tipo: "error", texto: (e as Error).message });
-                    setZonaEnviando(false);
-                  }
-                }}
-                className="mt-2 rounded bg-red-900 px-4 py-2 text-sm font-semibold text-white disabled:opacity-40"
-              >
-                Eliminar definitivamente
-              </button>
-            </>
-          )}
-        </div>
-
-        {zonaMensaje && (
-          <p className={`mt-3 text-sm ${zonaMensaje.tipo === "ok" ? "text-green-800" : "text-red-800"}`}>
-            {zonaMensaje.texto}
-          </p>
-        )}
       </section>
     </div>
   );
