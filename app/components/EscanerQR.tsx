@@ -134,10 +134,18 @@ export default function EscanerQR() {
         return;
       }
       // Segundo intento también falló: encolar el escaneo (no se pierde) y seguir escaneando.
-      pendientesRef.current.push({ id });
+      encolarPendiente(id);
       setEstado({ tipo: "sin_conexion", mensaje: "⚠ Sin conexión — reintentando…" });
       setTimeout(reanudar, CONFIRMACION_MS);
     }
+  }
+
+  // Encola un escaneo pendiente, reemplazando cualquier entrada previa del mismo id.
+  // Sin esto, reescanear el mismo QR durante un corte (2 fallas de red seguidas) deja
+  // 2 entradas y al reconectar se reproducen ambas -> doble toggle sobre el mismo equipo.
+  function encolarPendiente(id: string) {
+    pendientesRef.current = pendientesRef.current.filter((p) => p.id !== id);
+    pendientesRef.current.push({ id });
   }
 
   // Reintenta los escaneos que quedaron encolados por fallas de red previas.
@@ -148,6 +156,13 @@ export default function EscanerQR() {
     for (const p of pendientes) {
       await enviarEscaneo(p.id);
     }
+  }
+
+  // Encola un reporte de falla pendiente, reemplazando cualquier entrada previa del
+  // mismo equipo (misma protección anti-doble-reintento que encolarPendiente).
+  function encolarPendienteFalla(datos: FallaPendiente) {
+    pendientesFallaRef.current = pendientesFallaRef.current.filter((p) => p.equipoId !== datos.equipoId);
+    pendientesFallaRef.current.push(datos);
   }
 
   // Reintenta los reportes de falla que quedaron encolados por fallas de red previas.
@@ -238,7 +253,7 @@ export default function EscanerQR() {
         return;
       }
       // Segundo intento también falló: encolar el reporte y seguir escaneando.
-      pendientesFallaRef.current.push(datos);
+      encolarPendienteFalla(datos);
       setEnviandoFalla(false);
       setModalFalla(null);
       setEstado({ tipo: "sin_conexion", mensaje: "⚠ Sin conexión — reintentando…" });
