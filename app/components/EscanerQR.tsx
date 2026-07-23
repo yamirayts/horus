@@ -1,0 +1,529 @@
+"use client";
+
+import { useEffect, useRef, useState } from "react";
+import { Html5Qrcode } from "html5-qrcode";
+import type { Equipo } from "@/lib/db/equipos";
+import type { Accion } from "@/lib/alertas";
+
+const ELEMENT_ID = "lector-qr";
+const VENTANA_ANTIDOBLE_MS = 3000; // mismo id leído antes de este tiempo se ignora
+const REINTENTO_MS = 1500; // demora antes del reintento por falla de red
+const CONFIRMACION_MS = 1500; // tiempo que se muestra la confirmación/error antes de reanudar
+
+interface RespuestaConsulta {
+  ok: boolean;
+  equipo?: Equipo;
+  accion?: Accion;
+  error?: string;
+}
+
+interface RespuestaScan {
+  ok: boolean;
+  accion?: "activar" | "desactivar" | "bloqueado";
+  horas?: number;
+  error?: string;
+}
+
+/** Pantalla que se muestra sobre la cámara mientras no se está escaneando activamente. */
+type EstadoPantalla =
+  | { tipo: "escaneando" }
+  | { tipo: "consultando" }
+  | { tipo: "tarjeta"; id: string; equipo: Equipo; accion: Accion }
+  | { tipo: "tarjeta_error"; mensaje: string }
+  | { tipo: "enviando" }
+  | { tipo: "confirmando"; mensaje: string; variante: "activar" | "desactivar" | "error" | "falla" }
+  | { tipo: "sin_conexion"; mensaje: string };
+
+interface EscaneoPendiente {
+  id: string;
+}
+
+/** Reporte de falla encolado por una falla de red, para reintentar cuando vuelva la conexión. */
+interface FallaPendiente {
+  equipoId: string;
+  tipo: string;
+  descripcion?: string;
+  ponerEnMantenimiento: boolean;
+}
+
+const ETIQUETA_ESTADO: Record<Equipo["estado"], string> = {
+  disponible: "Disponible",
+  en_uso: "En uso",
+  mantenimiento: "En mantenimiento",
+};
+
+/** Tipos de falla que puede reportar el enfermero desde el escaneo (valores exactos que espera la DB). */
+const TIPOS_FALLA: { value: string; label: string }[] = [
+  { value: "no_enciende", label: "No enciende" },
+  { value: "alarma", label: "Alarma" },
+  { value: "bateria", label: "Batería" },
+  { value: "mecanica", label: "Mecánica" },
+  { value: "otra", label: "Otra" },
+];
+
+/**
+ * Escáner QR de pantalla completa: abre la cámara al montar, y al decodificar un QR
+ * consulta el equipo (GET /api/scan) y muestra una tarjeta de confirmación con un
+ * botón grande. Solo al tocar ese botón se ejecuta el toggle (POST /api/scan).
+ * Flujo de dos pasos: leer QR -> confirmar con un toque -> confirmación breve -> siguiente lectura.
+ */
+export default function EscanerQR() {
+  const [estado, setEstado] = useState<EstadoPantalla>({ tipo: "escaneando" });
+
+  // Mini-formulario de reporte de falla: solo se abre con un equipo ya identificado (tarjeta abierta).
+  const [modalFalla, setModalFalla] = useState<{ equipoId: string } | null>(null);
+  const [tipoFalla, setTipoFalla] = useState(TIPOS_FALLA[0].value);
+  const [descripcionFalla, setDescripcionFalla] = useState("");
+  const [ponerEnMantenimiento, setPonerEnMantenimiento] = useState(true);
+  const [enviandoFalla, setEnviandoFalla] = useState(false);
+  const [errorFalla, setErrorFalla] = useState<string | null>(null);
+
+  const scannerRef = useRef<Html5Qrcode | null>(null);
+  const ultimoRef = useRef<{ id: string; ts: number } | null>(null);
+  const pendientesRef = useRef<EscaneoPendiente[]>([]);
+  const pendientesFallaRef = useRef<FallaPendiente[]>([]);
+  const procesandoRef = useRef(false);
+
+  // Hora local HH:MM para el mensaje de confirmación.
+  function horaActual(): string {
+    const ahora = new Date();
+    return `${String(ahora.getHours()).padStart(2, "0")}:${String(ahora.getMinutes()).padStart(2, "0")}`;
+  }
+
+  // Vuelve al estado de escaneo y reanuda la decodificación de la cámara.
+  function reanudar() {
+    procesandoRef.current = false;
+    setEstado({ tipo: "escaneando" });
+    scannerRef.current?.resume();
+  }
+
+  // Ejecuta el toggle en el backend. Distingue error de red (reintentable/encolable)
+  // de error de aplicación (equipo desconocido, en mantenimiento: no se reintenta).
+  async function enviarEscaneo(id: string, intento = 1): Promise<void> {
+    try {
+      const res = await fetch("/api/scan", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id }),
+      });
+      const data: RespuestaScan = await res.json();
+
+      if (!data.ok || !data.accion || data.accion === "bloqueado") {
+        setEstado({
+          tipo: "confirmando",
+          mensaje: `⚠ ${id}: ${data.error ?? "no se pudo procesar"}`,
+          variante: "error",
+        });
+        setTimeout(reanudar, CONFIRMACION_MS);
+        return;
+      }
+
+      const etiqueta = data.accion === "activar" ? "ACTIVADO" : "DESACTIVADO";
+      setEstado({
+        tipo: "confirmando",
+        mensaje: `✓ ${id} ${etiqueta} — ${horaActual()}`,
+        variante: data.accion,
+      });
+      setTimeout(reanudar, CONFIRMACION_MS);
+    } catch {
+      // Falla de red (no hubo respuesta): reintentar una vez a los 1500 ms.
+      if (intento === 1) {
+        setTimeout(() => {
+          void enviarEscaneo(id, 2);
+        }, REINTENTO_MS);
+        return;
+      }
+      // Segundo intento también falló: encolar el escaneo (no se pierde) y seguir escaneando.
+      encolarPendiente(id);
+      setEstado({ tipo: "sin_conexion", mensaje: "⚠ Sin conexión — reintentando…" });
+      setTimeout(reanudar, CONFIRMACION_MS);
+    }
+  }
+
+  // Encola un escaneo pendiente, reemplazando cualquier entrada previa del mismo id.
+  // Sin esto, reescanear el mismo QR durante un corte (2 fallas de red seguidas) deja
+  // 2 entradas y al reconectar se reproducen ambas -> doble toggle sobre el mismo equipo.
+  function encolarPendiente(id: string) {
+    pendientesRef.current = pendientesRef.current.filter((p) => p.id !== id);
+    pendientesRef.current.push({ id });
+  }
+
+  // Reintenta los escaneos que quedaron encolados por fallas de red previas.
+  async function reintentarPendientes(): Promise<void> {
+    const pendientes = pendientesRef.current;
+    if (pendientes.length === 0) return;
+    pendientesRef.current = [];
+    for (const p of pendientes) {
+      await enviarEscaneo(p.id);
+    }
+  }
+
+  // Encola un reporte de falla pendiente, reemplazando cualquier entrada previa del
+  // mismo equipo (misma protección anti-doble-reintento que encolarPendiente).
+  function encolarPendienteFalla(datos: FallaPendiente) {
+    pendientesFallaRef.current = pendientesFallaRef.current.filter((p) => p.equipoId !== datos.equipoId);
+    pendientesFallaRef.current.push(datos);
+  }
+
+  // Reintenta los reportes de falla que quedaron encolados por fallas de red previas.
+  async function reintentarPendientesFalla(): Promise<void> {
+    const pendientes = pendientesFallaRef.current;
+    if (pendientes.length === 0) return;
+    pendientesFallaRef.current = [];
+    for (const p of pendientes) {
+      await enviarReporteFalla(p);
+    }
+  }
+
+  // Paso 1: consulta el equipo (sin efectos secundarios) y arma la tarjeta de confirmación.
+  async function consultarEquipo(id: string): Promise<void> {
+    try {
+      const res = await fetch(`/api/scan?id=${encodeURIComponent(id)}`);
+      const data: RespuestaConsulta = await res.json();
+      if (!data.ok || !data.equipo || !data.accion) {
+        setEstado({ tipo: "tarjeta_error", mensaje: data.error ?? "equipo desconocido" });
+        return;
+      }
+      setEstado({ tipo: "tarjeta", id, equipo: data.equipo, accion: data.accion });
+    } catch {
+      setEstado({ tipo: "tarjeta_error", mensaje: "no se pudo consultar el equipo" });
+    }
+  }
+
+  // Paso 2: el enfermero tocó el botón grande de la tarjeta -> recién ahí se ejecuta el toggle.
+  function confirmarAccion(id: string) {
+    setEstado({ tipo: "enviando" });
+    void enviarEscaneo(id);
+  }
+
+  // Abre el mini-formulario de falla con el equipo ya identificado por la tarjeta.
+  function abrirReportarFalla(equipoId: string) {
+    setTipoFalla(TIPOS_FALLA[0].value);
+    setDescripcionFalla("");
+    setPonerEnMantenimiento(true);
+    setErrorFalla(null);
+    setModalFalla({ equipoId });
+  }
+
+  function cerrarReportarFalla() {
+    setModalFalla(null);
+    setErrorFalla(null);
+  }
+
+  // Envía el reporte de falla. El origen lo fuerza siempre el backend a "real".
+  // Misma lógica de reintento/cola que enviarEscaneo: ante falla de red reintenta una vez
+  // a los 1500 ms; si vuelve a fallar, encola el reporte (no se pierde) y sigue escaneando.
+  async function enviarReporteFalla(datos: FallaPendiente, intento = 1): Promise<void> {
+    try {
+      const res = await fetch("/api/falla", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          equipo_id: datos.equipoId,
+          tipo: datos.tipo,
+          descripcion: datos.descripcion,
+          ponerEnMantenimiento: datos.ponerEnMantenimiento,
+        }),
+      });
+      const data: { ok: boolean; error?: string } = await res.json();
+
+      if (!data.ok) {
+        // Error de aplicación (ej. equipo_id faltante): no se reintenta.
+        setEnviandoFalla(false);
+        setErrorFalla(data.error ?? "no se pudo registrar la falla");
+        return;
+      }
+
+      setEnviandoFalla(false);
+      setModalFalla(null);
+      setEstado({
+        tipo: "confirmando",
+        mensaje: datos.ponerEnMantenimiento
+          ? "✓ Falla reportada — equipo en mantenimiento"
+          : "✓ Falla reportada",
+        variante: "falla",
+      });
+      setTimeout(reanudar, CONFIRMACION_MS);
+    } catch {
+      // Falla de red (no hubo respuesta): reintentar una vez a los 1500 ms.
+      if (intento === 1) {
+        setTimeout(() => {
+          void enviarReporteFalla(datos, 2);
+        }, REINTENTO_MS);
+        return;
+      }
+      // Segundo intento también falló: encolar el reporte y seguir escaneando.
+      encolarPendienteFalla(datos);
+      setEnviandoFalla(false);
+      setModalFalla(null);
+      setEstado({ tipo: "sin_conexion", mensaje: "⚠ Sin conexión — reintentando…" });
+      setTimeout(reanudar, CONFIRMACION_MS);
+    }
+  }
+
+  // Handler del botón "Reportar" del mini-formulario: arma los datos desde el estado del form.
+  async function enviarFalla(): Promise<void> {
+    if (!modalFalla) return;
+    setEnviandoFalla(true);
+    setErrorFalla(null);
+    await enviarReporteFalla({
+      equipoId: modalFalla.equipoId,
+      tipo: tipoFalla,
+      descripcion: descripcionFalla.trim() || undefined,
+      ponerEnMantenimiento,
+    });
+  }
+
+  // Callback de lectura exitosa del lector QR.
+  function alLeerCodigo(textoDecodificado: string) {
+    if (procesandoRef.current) return;
+    const ahora = Date.now();
+    const ultimo = ultimoRef.current;
+    // Anti-doble-lectura: mismo id leído hace menos de 3000 ms se ignora.
+    if (ultimo && ultimo.id === textoDecodificado && ahora - ultimo.ts < VENTANA_ANTIDOBLE_MS) {
+      return;
+    }
+    ultimoRef.current = { id: textoDecodificado, ts: ahora };
+    procesandoRef.current = true;
+    setEstado({ tipo: "consultando" });
+    scannerRef.current?.pause();
+    void consultarEquipo(textoDecodificado);
+  }
+
+  useEffect(() => {
+    const scanner = new Html5Qrcode(ELEMENT_ID);
+    scannerRef.current = scanner;
+    let cancelado = false;
+
+    scanner
+      .start(
+        { facingMode: "environment" },
+        { fps: 10, qrbox: { width: 250, height: 250 } },
+        (decodedText) => {
+          if (!cancelado) alLeerCodigo(decodedText);
+        },
+        () => {
+          // Errores de decodificación cuadro a cuadro (sin QR en foco): se ignoran.
+        }
+      )
+      .catch((err) => {
+        console.error("No se pudo iniciar la cámara:", err);
+      });
+
+    // Reintenta los pendientes (escaneos y reportes de falla) apenas vuelve la conexión,
+    // y cada 5 s como respaldo.
+    const alVolverConexion = () => {
+      void reintentarPendientes();
+      void reintentarPendientesFalla();
+    };
+    window.addEventListener("online", alVolverConexion);
+    const intervalo = window.setInterval(() => {
+      if (navigator.onLine) {
+        void reintentarPendientes();
+        void reintentarPendientesFalla();
+      }
+    }, 5000);
+
+    return () => {
+      cancelado = true;
+      window.removeEventListener("online", alVolverConexion);
+      window.clearInterval(intervalo);
+      const s = scannerRef.current;
+      scannerRef.current = null;
+      if (s) {
+        s.stop()
+          .then(() => s.clear())
+          .catch(() => {
+            // Si ya se detuvo o nunca llegó a iniciar, no hay nada que limpiar.
+          });
+      }
+    };
+    // Solo se ejecuta al montar/desmontar: los callbacks usan refs, no estado cerrado.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const colorVariante: Record<"activar" | "desactivar" | "error" | "falla", string> = {
+    activar: "bg-emerald-700/95",
+    desactivar: "bg-orange-700/95",
+    error: "bg-red-700/95",
+    falla: "bg-red-800/95",
+  };
+
+  return (
+    <div className="fixed inset-0 flex flex-col bg-black text-white">
+      <div className="relative flex-1 overflow-hidden">
+        <div
+          id={ELEMENT_ID}
+          className="h-full w-full [&>video]:h-full [&>video]:w-full [&>video]:object-cover"
+        />
+
+        {estado.tipo === "consultando" && (
+          <div className="absolute inset-0 flex items-center justify-center bg-black/70 p-6 text-center text-2xl font-bold">
+            Consultando…
+          </div>
+        )}
+
+        {estado.tipo === "enviando" && (
+          <div className="absolute inset-0 flex items-center justify-center bg-black/70 p-6 text-center text-2xl font-bold">
+            Enviando…
+          </div>
+        )}
+
+        {estado.tipo === "tarjeta" && (
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-6 bg-black/90 p-6 text-center">
+            <div>
+              <p className="text-sm text-gray-300">
+                {estado.equipo.tipo}
+                {estado.equipo.marca ? ` · ${estado.equipo.marca}` : ""}
+                {estado.equipo.modelo ? ` ${estado.equipo.modelo}` : ""}
+              </p>
+              <p className="text-4xl font-extrabold">{estado.id}</p>
+              <p className="mt-2 text-sm text-gray-400">
+                Estado actual: {ETIQUETA_ESTADO[estado.equipo.estado]}
+              </p>
+            </div>
+
+            {estado.accion === "bloqueado" ? (
+              <button
+                type="button"
+                disabled
+                className="w-full max-w-xs rounded-xl bg-gray-600 py-8 text-xl font-bold text-gray-300"
+              >
+                EQUIPO EN MANTENIMIENTO
+                <br />
+                <span className="text-sm font-normal">No se puede registrar uso</span>
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={() => confirmarAccion(estado.id)}
+                className={`w-full max-w-xs rounded-xl py-10 text-3xl font-extrabold text-white shadow-lg active:scale-95 ${
+                  estado.accion === "activar" ? "bg-green-600" : "bg-orange-600"
+                }`}
+              >
+                {estado.accion === "activar" ? "ACTIVAR" : "DESACTIVAR"}
+              </button>
+            )}
+
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={reanudar}
+                className="rounded border border-gray-500 px-4 py-2 text-sm text-gray-300"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={() => abrirReportarFalla(estado.id)}
+                className="rounded border border-red-400 px-4 py-2 text-sm text-red-300"
+              >
+                ⚠ Reportar falla
+              </button>
+            </div>
+          </div>
+        )}
+
+        {estado.tipo === "tarjeta_error" && (
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-6 bg-black/90 p-6 text-center">
+            <p className="text-xl font-bold text-red-400">⚠ {estado.mensaje}</p>
+            <button
+              type="button"
+              onClick={reanudar}
+              className="rounded border border-gray-500 px-4 py-2 text-sm text-gray-300"
+            >
+              Cancelar
+            </button>
+          </div>
+        )}
+
+        {estado.tipo === "confirmando" && (
+          <div
+            className={`absolute inset-0 flex items-center justify-center p-6 text-center text-2xl font-bold ${colorVariante[estado.variante]}`}
+          >
+            {estado.mensaje}
+          </div>
+        )}
+
+        {estado.tipo === "sin_conexion" && (
+          <div className="absolute inset-0 flex items-center justify-center bg-amber-700/95 p-6 text-center text-2xl font-bold">
+            {estado.mensaje}
+          </div>
+        )}
+      </div>
+
+      <div className="flex items-center justify-center gap-2 bg-gray-900 p-3">
+        <span className="text-xs text-gray-400">Apuntá la cámara al código QR del equipo</span>
+      </div>
+
+      {modalFalla && (
+        <div className="fixed inset-0 z-10 flex items-center justify-center bg-black/60 p-6">
+          <div className="w-full max-w-sm rounded bg-white p-4 text-gray-900">
+            <p className="mb-3 text-sm font-bold">Reportar falla — {modalFalla.equipoId}</p>
+
+            <label className="mb-1 block text-xs font-semibold text-gray-600" htmlFor="tipo-falla">
+              Tipo de falla
+            </label>
+            <select
+              id="tipo-falla"
+              value={tipoFalla}
+              onChange={(e) => setTipoFalla(e.target.value)}
+              disabled={enviandoFalla}
+              className="mb-3 w-full rounded border border-gray-300 p-2 text-sm"
+            >
+              {TIPOS_FALLA.map((t) => (
+                <option key={t.value} value={t.value}>
+                  {t.label}
+                </option>
+              ))}
+            </select>
+
+            <label className="mb-1 block text-xs font-semibold text-gray-600" htmlFor="descripcion-falla">
+              Descripción (opcional)
+            </label>
+            <textarea
+              id="descripcion-falla"
+              value={descripcionFalla}
+              onChange={(e) => setDescripcionFalla(e.target.value)}
+              disabled={enviandoFalla}
+              rows={1}
+              placeholder="Detalle adicional…"
+              className="mb-3 w-full rounded border border-gray-300 p-2 text-sm"
+            />
+
+            <label className="mb-3 flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={ponerEnMantenimiento}
+                onChange={(e) => setPonerEnMantenimiento(e.target.checked)}
+                disabled={enviandoFalla}
+              />
+              Poner en mantenimiento
+            </label>
+
+            {errorFalla && <p className="mb-3 text-xs text-red-600">⚠ {errorFalla}</p>}
+
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={cerrarReportarFalla}
+                disabled={enviandoFalla}
+                className="flex-1 rounded border border-gray-400 py-2 text-sm text-gray-700 disabled:opacity-50"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={() => void enviarFalla()}
+                disabled={enviandoFalla}
+                className="flex-1 rounded bg-green-700 py-2 text-sm font-bold text-white disabled:opacity-50"
+              >
+                {enviandoFalla ? "Enviando…" : "Reportar"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}

@@ -4,3 +4,6 @@ node_modules/
 .env.local
 .vercel/
 *.log
+next-env.d.ts
+*.tsbuildinfo
+tfi/
