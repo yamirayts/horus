@@ -46,7 +46,8 @@ function ScanContent() {
       return;
     }
     let cancelado = false;
-    fetch(`/api/scan?id=${encodeURIComponent(id)}`)
+    // no-store: cada apertura del QR debe reflejar el estado actual del equipo.
+    fetch(`/api/scan?id=${encodeURIComponent(id)}`, { cache: "no-store" })
       .then((r) => r.json() as Promise<RespuestaConsulta>)
       .then((data) => {
         if (cancelado) return;

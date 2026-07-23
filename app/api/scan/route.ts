@@ -3,13 +3,28 @@ import { getEquipo } from "@/lib/db/equipos";
 import { abrirCiclo, cerrarCicloAbierto } from "@/lib/db/ciclos";
 import { decidirAccion } from "@/lib/alertas";
 
+// El estado del equipo cambia con cada escaneo: nunca cachear.
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
+const HEADERS_SIN_CACHE = {
+  "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
+};
+
 // GET /api/scan?id= — previsualiza la acción que tomaría el toggle sin ejecutarla.
 export async function GET(req: NextRequest) {
   const id = req.nextUrl.searchParams.get("id");
-  if (!id) return NextResponse.json({ ok: false, error: "falta id" }, { status: 400 });
+  if (!id) {
+    return NextResponse.json({ ok: false, error: "falta id" }, { status: 400, headers: HEADERS_SIN_CACHE });
+  }
   const equipo = await getEquipo(id);
-  if (!equipo) return NextResponse.json({ ok: false, error: "equipo desconocido" }, { status: 404 });
-  return NextResponse.json({ ok: true, equipo, accion: decidirAccion(equipo.estado) });
+  if (!equipo) {
+    return NextResponse.json({ ok: false, error: "equipo desconocido" }, { status: 404, headers: HEADERS_SIN_CACHE });
+  }
+  return NextResponse.json(
+    { ok: true, equipo, accion: decidirAccion(equipo.estado) },
+    { headers: HEADERS_SIN_CACHE }
+  );
 }
 
 // POST /api/scan { id, ubicacion? } — ejecuta el toggle: abre o cierra el ciclo de uso.
