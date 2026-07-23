@@ -214,7 +214,11 @@ function seccionResumen(): Paragraph[] {
       ),
     ),
     titulo("Abstract", 2),
-    parrafo(negro("")),
+    parrafo(
+      negro(
+        "El resumen en inglés (Abstract) se incorporará al finalizar la ejecución del protocolo, con los resultados cuantitativos de la prueba de concepto.",
+      ),
+    ),
   ];
 }
 
@@ -341,7 +345,7 @@ function seccionMetodologia(): (Paragraph | Table)[] {
     ),
     parrafo(
       negro(
-        "Como fuentes de apoyo para caracterizar la carga de bombas de infusión —dato que el informe SATI-Q no releva— se utilizan dos estudios internacionales sobre infusión intravenosa múltiple en cuidados críticos: el estudio observacional ECLIPSE (Blandford et al., 2018), realizado sobre 1.326 pacientes y 2.008 infusiones simultáneas en 16 hospitales del sistema de salud del Reino Unido, que documenta que la infusión múltiple simultánea es la práctica habitual en cuidados críticos; y el estudio de laboratorio de Health Quality Ontario (2014), que describe un escenario de paciente crítico complejo con hasta 11 infusiones continuas simultáneas, tomado como cota superior de referencia. Los parámetros que no pueden derivarse directamente de estas fuentes —el perfil de distribución de bombas por paciente, el tamaño total del parque de equipos y el porcentaje de ocupación de camas— se declaran como supuestos explícitos del modelo, fundamentados en las fuentes citadas y en la experiencia clínica de la autora.",
+        "Como fuentes de apoyo para caracterizar la carga de bombas de infusión —dato que el informe SATI-Q no releva— se utilizan dos estudios internacionales sobre infusión intravenosa múltiple en cuidados críticos: el estudio observacional ECLIPSE (Blandford et al., 2020), realizado sobre 1.326 pacientes y 2.008 infusiones simultáneas en 16 hospitales del sistema de salud del Reino Unido, que documenta que la infusión múltiple simultánea es la práctica habitual en cuidados críticos; y el estudio de laboratorio de Health Quality Ontario (2014), que describe un escenario de paciente crítico complejo con hasta 11 infusiones continuas simultáneas, tomado como cota superior de referencia. Los parámetros que no pueden derivarse directamente de estas fuentes —el perfil de distribución de bombas por paciente, el tamaño total del parque de equipos y el porcentaje de ocupación de camas— se declaran como supuestos explícitos del modelo, fundamentados en las fuentes citadas y en la experiencia clínica de la autora.",
       ),
     ),
     tabla(
@@ -352,7 +356,7 @@ function seccionMetodologia(): (Paragraph | Table)[] {
         ["Rotación de pacientes", "Aproximadamente 2,3 ingresos/egresos por día con ocupación plena", "Derivado de la estadía media SATI-Q (6,03 días)"],
         ["Camas con ventilación simultánea", "Aproximadamente 5 de las 14 camas", "SATI-Q 2025 (35,75% de días-cama con ARM invasiva)"],
         ["Duración media del ciclo de ventilador", "Aproximadamente 9 días", "SATI-Q 2025 (duración media de episodio ventilado: 9,20 días; mediana 5)"],
-        ["Bombas de infusión por paciente", "Entre 1 y 8, con media aproximada de 3,5 a 4", "Supuesto declarado, apoyado en ECLIPSE (Blandford et al., 2018) y HQ Ontario (2014)"],
+        ["Bombas de infusión por paciente", "Entre 1 y 8, con media aproximada de 3,5 a 4", "Supuesto declarado, apoyado en ECLIPSE (Blandford et al., 2020) y HQ Ontario (2014)"],
         ["Perfil de distribución de bombas por paciente", "Carga baja (1-2 bombas): 30%; carga media (3-5): 50%; carga alta (6-8): 20%", "Supuesto declarado"],
         ["Monitores multiparamétricos", "1 por cama ocupada; ciclo de uso equivalente a la estadía del paciente", "Supuesto declarado"],
         ["Tamaño del parque de equipos", "17 ventiladores (14 en uso + 3 de respaldo), 14 monitores, 70 bombas de infusión", "Dato del escenario de referencia"],
@@ -799,20 +803,16 @@ function seccionReferencias(): Paragraph[] {
     titulo("8. Referencias bibliográficas", 1),
     referencia("Alshamasneh, W. A. M., Jaaffar, J., & Obiedat, A. M. (2021). IoT MEMS: IoT-Based Paradigm for Medical Equipment Management Systems of ICUs in Light of COVID-19 Outbreak. IEEE Access, 9, 147917-147929."),
     referencia("Asociación Española de Normalización. (2018). UNE-EN 13306:2018. Mantenimiento. Terminología del mantenimiento. AENOR."),
-    referencia("Baretich, M. F., & Davis-Smith, C. (2020). Medical Equipment Management. Association for the Advancement of Medical Instrumentation (AAMI)."),
-    referencia("Blandford, A., Furniss, D., et al. (2018). Intravenous infusion practices across England and their impact on patient safety (ECLIPSE): a mixed-methods observational study. BMJ Quality & Safety."),
+    referencia("Blandford, A., Furniss, D., Galal-Edeen, G. H., et al. (2020). Intravenous infusion practices across England and their impact on patient safety (ECLIPSE): a mixed-methods observational study. NIHR Journals Library, Health Services and Delivery Research, 8(7)."),
     referencia("European Committee for Standardization. (2019). EN 15341:2019. Maintenance — Maintenance Key Performance Indicators. CEN."),
     referencia("Health Quality Ontario. (2014). Multiple Intravenous Infusions Phase 2b: Laboratory Study."),
     referencia("Iadanza, E., Gonnelli, V., Satta, F., & Gherardelli, M. (2019). Evidence-based medical equipment management: a convenient implementation. Medical & Biological Engineering & Computing, 57(10), 2215-2230."),
-    referencia("Jamshidi, A., Rahimi, S. A., Ait-Kadi, D., & Ruiz, A. (2015). A comprehensive fuzzy risk-based maintenance framework for prioritization of medical devices. Applied Soft Computing, 32, 322-334."),
     referencia("Ma, L., Wang, Y., Wang, L., & Wang, X. (2021). Practical Application of QR Code Electronic Manuals in Equipment Management and Training. Frontiers in Surgery, 8, 766006."),
     referencia("Ministerio de Salud de la Provincia de Buenos Aires. (s.f.). Dirección de Fiscalización Sanitaria: habilitación de establecimientos y equipamiento."),
     referencia("Ministerio de Salud de la Provincia de Buenos Aires. (s.f.). Sistema de Atención Médica Organizada (SAMO)."),
     referencia("Organización Mundial de la Salud. (2012). Introducción al programa de mantenimiento de equipos médicos. Serie de documentos técnicos de la OMS sobre dispositivos médicos. Ginebra: OMS."),
     referencia("Pereira, M. T., Silva, I. N. S., Lima, J. F. P., et al. (2023). Precision and reliability study of hospital infusion pumps: a systematic review. BioMedical Engineering OnLine, 22(1), 26."),
-    referencia("República Argentina. (2006). Decreto 828/2006. Equipamiento médico hospitalario. Boletín Oficial de la República Argentina."),
     referencia("Sociedad Argentina de Terapia Intensiva. (2025). Informe SATI-Q UCI Adultos 2025. Programa SATI-Q. Recuperado de https://archive.org/download/resultado-2025/info2025.pdf"),
-    referencia("Taghipour, S., Banjevic, D., & Jardine, A. K. (2011). Prioritization of medical equipment for maintenance decisions. Journal of the Operational Research Society, 62(9), 1666-1687."),
     referencia("Wang, B., Rui, T., & Balar, S. (2013). An estimate of patient incidents caused by medical equipment maintenance omissions. Biomedical Instrumentation & Technology, 47(1), 84-91."),
   ];
 }
