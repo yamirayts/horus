@@ -7,7 +7,9 @@ import { registrarFalla } from "@/lib/db/fallas";
 export async function POST(req: NextRequest) {
   const { equipo_id, cantidad, dias_rango } = await req.json();
   const n = Number(cantidad);
-  const rango = Number(dias_rango) || 90;
+  // Default 20: dentro de la ventana de 30 días que usa el tablero para MTBF (lib/tablero.ts),
+  // con margen. Un default de 90 dejaba ~2/3 de las fallas sintéticas fuera del cálculo.
+  const rango = Number(dias_rango) || 20;
   if (!equipo_id || !n || n <= 0) {
     return NextResponse.json({ ok: false, error: "datos inválidos" }, { status: 400 });
   }

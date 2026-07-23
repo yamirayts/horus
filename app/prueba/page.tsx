@@ -178,7 +178,7 @@ function BloqueStress() {
 function BloqueFallas() {
   const [equipoId, setEquipoId] = useState("");
   const [cantidad, setCantidad] = useState("");
-  const [diasRango, setDiasRango] = useState("90");
+  const [diasRango, setDiasRango] = useState("20");
   const [enviando, setEnviando] = useState(false);
   const [mensaje, setMensaje] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -215,6 +215,10 @@ function BloqueFallas() {
   return (
     <section className="rounded border border-gray-300 p-3">
       <h2 className="mb-2 text-sm font-bold">Fallas sintéticas (para MTBF)</h2>
+      <p className="mb-2 text-xs text-gray-500">
+        Nota: el tablero muestra MTBF sobre fallas de los últimos 30 días. Rango recomendado:
+        ≤30 días.
+      </p>
       <form onSubmit={alEnviar} className="flex flex-col gap-2">
         <label className="text-sm">
           Equipo (id)
