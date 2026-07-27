@@ -8,20 +8,18 @@ import Logo from "./Logo";
 // Menú principal de navegación. Mobile-first: en pantallas chicas se despliega desde
 // un botón hamburguesa; en escritorio queda visible arriba. Se oculta al imprimir.
 const secciones: { href: string; label: string }[] = [
-  { href: "/", label: "Escanear" },
   { href: "/tablero", label: "Tablero" },
   { href: "/equipos", label: "Equipos" },
-  { href: "/alta", label: "Alta" },
   { href: "/etiquetas", label: "Etiquetas" },
   { href: "/prueba", label: "Modo prueba" },
+  { href: "/escanear", label: "Escanear" },
 ];
 
 export default function Navegacion() {
   const path = usePathname();
   const [abierto, setAbierto] = useState(false);
 
-  const esActiva = (href: string) =>
-    href === "/" ? path === "/" : path.startsWith(href);
+  const esActiva = (href: string) => path === href || path.startsWith(`${href}/`);
 
   return (
     <nav className="bg-emerald-700 text-white shadow-sm sticky top-0 z-40 print:hidden">
