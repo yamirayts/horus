@@ -2,6 +2,7 @@ import Link from "next/link";
 import { construirTablero, TIPOS_EQUIPO, HORAS_PERIODO_TUE, type EquipoTablero } from "@/lib/tablero";
 import BarraUmbral from "@/app/components/BarraUmbral";
 import IconoTipo from "@/app/components/IconoTipo";
+import AutoRefresh from "@/app/components/AutoRefresh";
 
 // Horas y estados cambian con cada escaneo/falla: nunca cachear esta página.
 export const dynamic = "force-dynamic";
@@ -49,9 +50,10 @@ export default async function TableroPage() {
       <div className="mb-5 flex flex-wrap items-end justify-between gap-2">
         <div>
           <h1 className="text-2xl font-bold text-slate-900">Tablero de Ingeniería Clínica</h1>
-          <p className="text-sm text-slate-500">
-            {totalEquipos} equipos activos · Panorama en tiempo real
-          </p>
+          <div className="mt-1 flex flex-wrap items-center gap-2">
+            <p className="text-sm text-slate-500">{totalEquipos} equipos activos</p>
+            <AutoRefresh intervalMs={30_000} />
+          </div>
         </div>
         <Link
           href="/equipos"
