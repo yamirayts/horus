@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { Equipo } from "@/lib/db/equipos";
 import BarraUmbral from "@/app/components/BarraUmbral";
+import IconoTipo from "@/app/components/IconoTipo";
 
 const ETIQUETA_TIPO: Record<string, string> = {
   bomba_infusion: "Bomba de infusión",
@@ -15,26 +16,42 @@ const ETIQUETA_ESTADO: Record<Equipo["estado"], string> = {
 };
 
 const COLOR_ESTADO: Record<Equipo["estado"], string> = {
-  disponible: "bg-green-100 text-green-800",
-  en_uso: "bg-blue-100 text-blue-800",
-  mantenimiento: "bg-gray-200 text-gray-700",
+  disponible: "bg-emerald-100 text-emerald-800",
+  en_uso: "bg-teal-100 text-teal-800",
+  mantenimiento: "bg-amber-100 text-amber-800",
 };
 
 interface TarjetaEquipoProps {
   equipo: Equipo;
 }
 
-/** Card resumen de un equipo: id, tipo, estado, barra de umbral y ubicación. Enlaza al detalle. */
+/** Card resumen de un equipo: icono, id, tipo, estado, barra de umbral y ubicación. */
 export default function TarjetaEquipo({ equipo }: TarjetaEquipoProps) {
+  const inactivo = !equipo.activo;
   return (
     <Link
       href={`/equipos/${encodeURIComponent(equipo.id)}`}
-      className="block rounded-lg border border-gray-200 bg-white p-4 shadow-sm transition hover:border-gray-400 hover:shadow"
+      className={`block rounded-lg border p-4 shadow-sm transition ${
+        inactivo
+          ? "border-red-200 bg-red-50/50 hover:border-red-300"
+          : "border-slate-200 bg-white hover:border-emerald-400 hover:shadow"
+      }`}
     >
-      <div className="mb-2 flex items-start justify-between gap-2">
-        <div>
-          <p className="font-mono text-lg font-bold">{equipo.id}</p>
-          <p className="text-sm text-gray-600">{ETIQUETA_TIPO[equipo.tipo] ?? equipo.tipo}</p>
+      <div className="mb-3 flex items-start justify-between gap-2">
+        <div className="flex items-start gap-3">
+          <div className="rounded-lg bg-emerald-50 p-2 text-emerald-700">
+            <IconoTipo tipo={equipo.tipo} className="h-6 w-6" />
+          </div>
+          <div>
+            <p className="font-mono text-lg font-bold text-slate-900">{equipo.id}</p>
+            <p className="text-sm text-slate-600">{ETIQUETA_TIPO[equipo.tipo] ?? equipo.tipo}</p>
+            {equipo.marca && (
+              <p className="text-xs text-slate-500">
+                {equipo.marca}
+                {equipo.modelo ? ` · ${equipo.modelo}` : ""}
+              </p>
+            )}
+          </div>
         </div>
         <span className={`shrink-0 rounded-full px-2 py-1 text-xs font-semibold ${COLOR_ESTADO[equipo.estado]}`}>
           {ETIQUETA_ESTADO[equipo.estado]}
@@ -48,9 +65,16 @@ export default function TarjetaEquipo({ equipo }: TarjetaEquipoProps) {
         pctVencido={Number(equipo.pct_vencido)}
       />
 
-      <p className="mt-2 text-xs text-gray-500">
-        {equipo.ubicacion ? `Ubicación: ${equipo.ubicacion}` : "Sin ubicación asignada"}
-      </p>
+      <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-xs">
+        <span className="text-slate-500">
+          {equipo.ubicacion ? equipo.ubicacion : "Sin ubicación"}
+        </span>
+        {inactivo && (
+          <span className="rounded-full bg-red-100 px-2 py-0.5 font-semibold text-red-800">
+            dado de baja
+          </span>
+        )}
+      </div>
     </Link>
   );
 }
