@@ -213,7 +213,7 @@ export default async function TableroPage() {
                     </td>
                     <td className="min-w-[10rem] p-3">
                       <BarraUmbral
-                        horasAcum={Number(eq.horas_acumuladas)}
+                        horasAcum={eq.horasTotales}
                         umbral={Number(eq.umbral_horas)}
                         pctAlerta={Number(eq.pct_alerta)}
                         pctVencido={Number(eq.pct_vencido)}

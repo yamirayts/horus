@@ -23,10 +23,17 @@ const COLOR_ESTADO: Record<Equipo["estado"], string> = {
 
 interface TarjetaEquipoProps {
   equipo: Equipo;
+  /**
+   * Horas totales del equipo AL INSTANTE (acumuladas + tiempo del ciclo abierto si está
+   * en uso). Opcional: si no se pasa, se usa equipo.horas_acumuladas tal cual. La página
+   * que renderiza esta card calcula el valor "en vivo" y lo inyecta para que la alerta
+   * refleje el estado real cuando el equipo está corriendo un ciclo.
+   */
+  horasTotales?: number;
 }
 
 /** Card resumen de un equipo: icono, id, tipo, estado, barra de umbral y ubicación. */
-export default function TarjetaEquipo({ equipo }: TarjetaEquipoProps) {
+export default function TarjetaEquipo({ equipo, horasTotales }: TarjetaEquipoProps) {
   const inactivo = !equipo.activo;
   return (
     <Link
@@ -59,7 +66,7 @@ export default function TarjetaEquipo({ equipo }: TarjetaEquipoProps) {
       </div>
 
       <BarraUmbral
-        horasAcum={Number(equipo.horas_acumuladas)}
+        horasAcum={horasTotales ?? Number(equipo.horas_acumuladas)}
         umbral={Number(equipo.umbral_horas)}
         pctAlerta={Number(equipo.pct_alerta)}
         pctVencido={Number(equipo.pct_vencido)}

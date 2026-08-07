@@ -143,10 +143,13 @@ function referencia(t: string): Paragraph {
   });
 }
 
+// Ancho útil aproximado de la página A4 con márgenes UNAJ (2.54 cm cada lado): 9020 twips.
+const ANCHO_UTIL_DXA = 9020;
+
 /** Celda de tabla con texto en Times New Roman 11, con margen interno. */
-function celda(t: string, opts: { bold?: boolean; widthPct?: number } = {}): TableCell {
+function celda(t: string, opts: { bold?: boolean; widthDxa?: number } = {}): TableCell {
   return new TableCell({
-    width: opts.widthPct !== undefined ? { size: opts.widthPct, type: WidthType.PERCENTAGE } : undefined,
+    width: opts.widthDxa !== undefined ? { size: opts.widthDxa, type: WidthType.DXA } : undefined,
     margins: { top: 80, bottom: 80, left: 100, right: 100 },
     children: [
       new Paragraph({
@@ -158,18 +161,27 @@ function celda(t: string, opts: { bold?: boolean; widthPct?: number } = {}): Tab
 }
 
 /** Fila de tabla a partir de un arreglo de textos de celda. */
-function fila(celdas: string[], opts: { header?: boolean; widths?: number[] } = {}): TableRow {
+function fila(celdas: string[], opts: { header?: boolean; widthsDxa?: number[] } = {}): TableRow {
   return new TableRow({
     tableHeader: opts.header ?? false,
-    children: celdas.map((c, i) => celda(c, { bold: opts.header ?? false, widthPct: opts.widths?.[i] })),
+    children: celdas.map((c, i) => celda(c, { bold: opts.header ?? false, widthDxa: opts.widthsDxa?.[i] })),
   });
 }
 
-/** Tabla simple de ancho completo, con fila de encabezado en negrita. */
-function tabla(encabezados: string[], filas: string[][], widths?: number[]): Table {
+/**
+ * Tabla simple de ancho completo con fila de encabezado en negrita.
+ * widthsPct: porcentajes que suman 100. Se convierten a DXA absolutos para que
+ * Word / LibreOffice respeten el ancho por columna (usar PERCENTAGE deja los
+ * anchos a criterio del renderer y las columnas se descolocan con contenido largo).
+ */
+function tabla(encabezados: string[], filas: string[][], widthsPct?: number[]): Table {
+  const widthsDxa = widthsPct
+    ? widthsPct.map((p) => Math.round((p / 100) * ANCHO_UTIL_DXA))
+    : Array(encabezados.length).fill(Math.round(ANCHO_UTIL_DXA / encabezados.length));
   return new Table({
-    width: { size: 100, type: WidthType.PERCENTAGE },
-    rows: [fila(encabezados, { header: true, widths }), ...filas.map((f) => fila(f, { widths }))],
+    width: { size: ANCHO_UTIL_DXA, type: WidthType.DXA },
+    columnWidths: widthsDxa,
+    rows: [fila(encabezados, { header: true, widthsDxa }), ...filas.map((f) => fila(f, { widthsDxa }))],
   });
 }
 
@@ -200,7 +212,7 @@ function seccionResumen(): Paragraph[] {
     titulo("1. Resumen", 1),
     parrafo(
       negro(
-        "El presente trabajo aborda el diseño de un sistema de registro de uso de equipamiento crítico de Unidades de Cuidados Intensivos (UCI) para un hospital público de la Provincia de Buenos Aires, con el objetivo de habilitar estrategias de mantenimiento basadas en la condición real de uso, y desarrolla una prueba de concepto que valida la infraestructura de captura y procesamiento del dato en un entorno controlado. El equipamiento crítico de UCI —bombas de infusión, monitores multiparamétricos y ventiladores mecánicos— requiere un seguimiento riguroso que garantice su disponibilidad operativa. Sin embargo, la práctica habitual en los hospitales públicos provinciales se basa en el mantenimiento preventivo por calendario, sin considerar las horas reales de funcionamiento de cada equipo.",
+        "El presente trabajo aborda el diseño de un sistema de registro de uso de equipamiento crítico de Unidades de Cuidados Intensivos (UCI) para un hospital público de la Provincia de Buenos Aires, con el objetivo de habilitar estrategias de mantenimiento basadas en la condición real de uso, y desarrolla una prueba de concepto que valida la infraestructura de captura y procesamiento del dato en un entorno controlado. El equipamiento crítico de UCI —bombas de infusión, monitores multiparamétricos y ventiladores mecánicos— requiere un seguimiento riguroso que garantice su disponibilidad operativa. Sin embargo, en la práctica observada por la autora en el sistema público bonaerense —y consistente con la ausencia de reportes sistemáticos de horas de uso reales en la literatura de gestión provincial (Iadanza et al., 2019)—, el mantenimiento se planifica mayormente por calendario, sin considerar las horas efectivas de funcionamiento de cada equipo.",
       ),
     ),
     parrafo(
@@ -210,7 +222,7 @@ function seccionResumen(): Paragraph[] {
     ),
     parrafo(
       negro(
-        "El trabajo incluye el diseño de la arquitectura funcional, el desarrollo de un prototipo funcional de bajo costo (repositorio abierto, despliegue en la nube y base de datos gratuita) y una prueba de concepto en entorno controlado orientada a validar la robustez técnica de la infraestructura de datos (captura por QR, tolerancia a cortes de red, persistencia, exactitud en la acumulación de horas y disparo de alertas). Se toma como escenario de referencia una UCI de 14 camas de un hospital público del municipio de La Matanza, con supuestos declarados de forma explícita. Complementariamente se analiza la viabilidad técnica, operativa y normativa.",
+        "El trabajo incluye el diseño de la arquitectura funcional, el desarrollo de un prototipo operativo de bajo costo —con repositorio abierto, despliegue en la nube y base de datos gratuita— y una prueba de concepto en entorno controlado orientada a validar la robustez técnica de la infraestructura de datos: captura por QR, tolerancia a cortes de red, persistencia, exactitud en la acumulación de horas y disparo de alertas. Se toma como escenario de referencia una UCI de 14 camas de un hospital público del municipio de La Matanza, con supuestos declarados de forma explícita. Complementariamente, se analiza la viabilidad técnica, operativa y normativa del sistema.",
       ),
     ),
     parrafo(
@@ -247,7 +259,7 @@ function seccionIntroduccion(): Paragraph[] {
     ),
     parrafo(
       negro(
-        "La Organización Mundial de la Salud (OMS, 2012) establece que un programa efectivo de mantenimiento de equipos médicos debe basarse en información objetiva sobre el uso y el estado de los dispositivos. Sin embargo, la realidad en los hospitales públicos de la Provincia de Buenos Aires dista de este estándar: la práctica predominante consiste en realizar mantenimiento preventivo por intervalos fijos de calendario, sin considerar las horas reales de funcionamiento de cada equipo. En el ámbito provincial, la financiación del mantenimiento y la pequeña aparatología se apoya en gran medida en el Sistema de Atención Médica Organizada (SAMO), mecanismo de recupero de costos que refuerza la necesidad de asignar los recursos limitados de forma eficiente (Ministerio de Salud de la Provincia de Buenos Aires, s.f.).",
+        "La Organización Mundial de la Salud (OMS, 2012) establece que un programa efectivo de mantenimiento de equipos médicos debe basarse en información objetiva sobre el uso y el estado de los dispositivos. Sin embargo, en la práctica observada por la autora en el ámbito bonaerense, así como en la ausencia de reportes públicos sobre registros sistemáticos de uso de equipamiento crítico a nivel provincial, la planificación del mantenimiento se apoya mayormente en intervalos fijos de calendario, sin considerar las horas reales de funcionamiento de cada equipo. En el ámbito provincial, la financiación del mantenimiento y la pequeña aparatología se apoya en gran medida en el Sistema de Atención Médica Organizada (SAMO), mecanismo de recupero de costos que refuerza la necesidad de asignar los recursos limitados de forma eficiente (Ministerio de Salud de la Provincia de Buenos Aires, s.f.).",
       ),
     ),
     parrafo(
@@ -268,12 +280,12 @@ function seccionIntroduccion(): Paragraph[] {
     ),
     parrafo(
       negro(
-        "Es preciso señalar que la superioridad del mantenimiento basado en condición sobre el preventivo por calendario, si bien es un enfoque reconocido y respaldado por casos de aplicación (por ejemplo, estudios de costo-beneficio de mantenimiento basado en condición en dispositivos médicos que utilizan datos de campo y de uso para reducir intervenciones innecesarias), no está universalmente establecida para todos los tipos de equipamiento. Parte de la literatura sobre gestión de mantenimiento de dispositivos médicos no ha hallado diferencias determinantes entre distintas frecuencias y estrategias de mantenimiento para ciertas clases de equipos (Wang et al., 2013). En el caso particular de las bombas de infusión, revisiones sistemáticas sobre su precisión y confiabilidad en el tiempo (Pereira et al., 2023) muestran que el desempeño de estos equipos puede variar de forma relevante a lo largo de su vida útil, lo que refuerza la necesidad de contar con datos de uso reales que permitan contextualizar ese desempeño y sustentar decisiones de mantenimiento con evidencia, y no únicamente con el paso del calendario. Esta discusión, lejos de debilitar la propuesta, la refuerza: para poder evaluar y sustentar decisiones de mantenimiento basadas en evidencia se requiere, en primer lugar, disponer del dato de uso de forma accesible —brecha que este trabajo aborda—.",
+        "Es preciso señalar que la superioridad del mantenimiento basado en condición sobre el preventivo por calendario, si bien es un enfoque reconocido y respaldado por casos de aplicación (por ejemplo, estudios de costo-beneficio de mantenimiento basado en condición en dispositivos médicos que utilizan datos de campo y de uso para reducir intervenciones innecesarias), no está universalmente establecida para todos los tipos de equipamiento. Parte de la literatura sobre gestión de mantenimiento de dispositivos médicos no ha hallado diferencias determinantes entre distintas frecuencias y estrategias de mantenimiento para ciertas clases de equipos (Wang et al., 2013); una posible explicación es la heterogeneidad del parque analizado en ese estudio, que dificulta atribuir el desempeño observado a la estrategia de mantenimiento y no al tipo de equipo. En el caso particular de las bombas de infusión, revisiones sistemáticas sobre su precisión y confiabilidad en el tiempo (Pereira et al., 2023) muestran que el desempeño de estos equipos puede variar de forma relevante a lo largo de su vida útil, lo que refuerza la necesidad de contar con datos de uso reales que permitan contextualizar ese desempeño y sustentar decisiones de mantenimiento con evidencia, y no únicamente con el paso del calendario. Esta discusión, lejos de debilitar la propuesta, la refuerza: para poder evaluar y sustentar decisiones de mantenimiento basadas en evidencia se requiere, en primer lugar, disponer del dato de uso de forma accesible —brecha que este trabajo aborda—.",
       ),
     ),
     parrafo(
       negro(
-        "Diversos estudios han demostrado la viabilidad de utilizar tecnologías de identificación automática para el seguimiento de equipamiento médico. Ma et al. (2021) reportaron que la implementación de códigos QR en equipamiento hospitalario redujo significativamente los tiempos y costos de gestión. Alshamasneh et al. (2021) propusieron un paradigma basado en Internet de las Cosas (IoT) para la gestión de equipamiento médico en UCIs, demostrando que el etiquetado electrónico y el seguimiento automatizado mejoran la transparencia y la eficiencia. Revisiones sistemáticas sobre la aplicación de RFID y códigos en hospitales señalan que la adopción real, aunque todavía se concentra mayormente en experiencias piloto, reporta beneficios consistentes en la gestión del equipamiento y la eficiencia operativa. La elección tecnológica del presente trabajo —códigos QR en lugar de RFID/RTLS— se fundamenta precisamente en el contexto de recursos limitados del hospital público provincial: el QR constituye la vía de captura de menor costo y mayor accesibilidad.",
+        "Diversos estudios han demostrado la viabilidad de utilizar tecnologías de identificación automática para el seguimiento de equipamiento médico. Ma et al. (2021) reportaron que la implementación de códigos QR en equipamiento hospitalario redujo significativamente los tiempos y costos de gestión. Alshamasneh et al. (2021) propusieron un paradigma basado en Internet de las Cosas (IoT) para la gestión de equipamiento médico en UCIs, demostrando que el etiquetado electrónico y el seguimiento automatizado mejoran la transparencia y la eficiencia. En una línea consistente, Iadanza et al. (2019) documentan que la gestión de equipamiento médico basada en evidencia reporta beneficios en la eficiencia operativa cuando se dispone de datos de uso accesibles y estructurados. La elección tecnológica del presente trabajo —códigos QR en lugar de RFID/RTLS— se fundamenta precisamente en el contexto de recursos limitados del hospital público provincial: el QR constituye la vía de captura de menor costo y mayor accesibilidad, y adicionalmente evita la instalación de la infraestructura de lectura permanente (antenas, lectores fijos) que requieren los sistemas de radiofrecuencia.",
       ),
     ),
     titulo("2.3. Justificación", 2),
@@ -305,7 +317,7 @@ function seccionObjetivos(): Paragraph[] {
     titulo("3.1. Objetivo general", 2),
     parrafo(
       negro(
-        "Diseñar la arquitectura funcional de un sistema de registro de uso de equipamiento crítico de UCI —que permita obtener horas de funcionamiento en equipos sin horómetro incorporado y centralizar los datos de uso de los ventiladores mecánicos—, desarrollar un prototipo funcional de bajo costo y validar, mediante una prueba de concepto en entorno controlado, la robustez de su infraestructura de captura y procesamiento del dato, analizando además su viabilidad técnica, operativa y normativa para hospitales públicos de la Provincia de Buenos Aires, tomando como referencia una UCI de 14 camas del municipio de La Matanza.",
+        "Diseñar la arquitectura funcional de un sistema de registro de uso de equipamiento crítico de UCI —que permita obtener horas de funcionamiento en equipos sin horómetro incorporado y centralizar los datos de uso de los ventiladores mecánicos—, desarrollar un prototipo operativo de bajo costo, validar mediante una prueba de concepto en entorno controlado la robustez de su infraestructura de captura y procesamiento del dato, y analizar su viabilidad técnica, operativa y normativa para hospitales públicos de la Provincia de Buenos Aires, tomando como referencia una UCI de 14 camas del municipio de La Matanza.",
       ),
     ),
     titulo("3.2. Objetivos específicos", 2),
@@ -370,9 +382,14 @@ function seccionMetodologia(): (Paragraph | Table)[] {
         ["Perfil de distribución de bombas por paciente", "Carga baja (1-2 bombas): 30%; carga media (3-5): 50%; carga alta (6-8): 20%", "Supuesto declarado"],
         ["Monitores multiparamétricos", "1 por cama ocupada; ciclo de uso equivalente a la estadía del paciente", "Supuesto declarado"],
         ["Tamaño del parque de equipos", "17 ventiladores (14 en uso + 3 de respaldo), 14 monitores, 70 bombas de infusión", "Dato del escenario de referencia"],
-        ["Flujo diario de eventos resultante", "Aproximadamente 40 a 60 escaneos por día en el conjunto de la UCI", "Valor derivado de los parámetros anteriores"],
+        ["Flujo diario de eventos resultante", "Aproximadamente 15 a 25 escaneos por día en régimen estable (día 1 concentra el poblado inicial del parque, aproximadamente 78 eventos)", "Valor derivado del cronograma reproducible generado a partir de los parámetros anteriores"],
       ],
       [34, 30, 36],
+    ),
+    parrafo(
+      negro(
+        "La distribución de perfiles de complejidad de bombas por paciente (30% carga baja, 50% media, 20% alta) se establece como aproximación operativa consistente con la práctica clínica de la autora en UCI polivalente. Los rangos por perfil (1-2, 3-5 y 6-8 bombas) son compatibles con las cifras observadas en ECLIPSE (Blandford et al., 2020) —que documenta la multiplicidad de infusiones simultáneas como práctica habitual en cuidados críticos— y con la cota superior del escenario de paciente crítico complejo descripto por Health Quality Ontario (2014), que llega a once infusiones simultáneas. Los resultados de la prueba de concepto son robustos frente a esta distribución en tanto los tres perfiles se ven representados por el escenario y el generador de cronograma garantiza que ningún paciente exceda la cota superior de la cota clínica.",
+      ),
     ),
     parrafo(
       negro(
@@ -388,12 +405,12 @@ function seccionMetodologia(): (Paragraph | Table)[] {
     ),
     parrafo(
       negro(
-        "Plano técnico. La robustez de la infraestructura de datos —captura por QR, tolerancia a microcortes de red, latencia de sincronización, exactitud en la acumulación de horas y disparo de alertas— constituye un conjunto de propiedades intrínsecas del sistema que no dependen del entorno de despliegue. Por ello, se validan directamente con el prototipo. Adicionalmente, el protocolo somete al sistema a condiciones más adversas que las esperables (cortes de red agresivos, tasas de error elevadas y sobreuso continuo), de modo que la validación se realiza sobre el peor caso.",
+        "Plano técnico. La robustez de la infraestructura de datos —captura por QR, tolerancia a microcortes de red, latencia de sincronización, exactitud en la acumulación de horas y disparo de alertas— constituye un conjunto de propiedades intrínsecas del sistema que no dependen del entorno de despliegue. Por ello, se validan directamente con el prototipo. El protocolo aísla y expone el comportamiento del sistema en cada condición adversa por separado: cortes de red forzados en momentos discretos (etapa 3), variación programada de condiciones de iluminación en la maqueta física (etapa 2, con rotación diaria entre luz natural, luz artificial directa y luz baja) y sobreuso puntual mediante horas iniciales elevadas y factor de aceleración temporal (etapa 4). No se pretende reproducir un peor caso continuo sino documentar el comportamiento del sistema en cada dimensión adversa relevante.",
       ),
     ),
     parrafo(
       negro(
-        "Plano organizacional. Los factores propios de la dinámica asistencial real —carga de trabajo, concurrencia de equipos a escala completa, rotación en cambios de turno y errores humanos por fatiga— no se pretenden validar empíricamente en el entorno controlado. Esta dimensión se sostiene de tres formas: (a) evidencia por precedente, a partir de literatura que documenta mecanismos de captura equivalentes en entornos de salud reales; (b) el escenario de referencia definido en 4.2, con sus supuestos declarados; y (c) una hoja de ruta explícita que enumera los factores no validables en esta etapa y el modo en que se resolverían en una implementación piloto real posterior (ver 6.4).",
+        "Plano organizacional. Los factores propios de la dinámica asistencial real —carga de trabajo, concurrencia de equipos a escala completa, rotación en cambios de turno y errores humanos por fatiga— no se pretenden validar empíricamente en el entorno controlado. Esta dimensión se sostiene de tres formas: (a) evidencia por precedente, a partir de literatura que documenta mecanismos de captura equivalentes en entornos de salud reales; (b) el escenario de referencia definido en 4.2, con sus supuestos declarados; y (c) una hoja de ruta explícita que enumera los factores no validables en esta etapa y el modo en que se resolverían en una eventual implementación futura en entorno hospitalario (ver 6.4).",
       ),
     ),
     parrafo(
@@ -403,12 +420,12 @@ function seccionMetodologia(): (Paragraph | Table)[] {
     ),
     parrafo(
       negro(
-        "Nivel 1 — Exactitud del cálculo (empírico, validado en esta etapa). Consiste en contrastar las horas que acumula el sistema contra el tiempo real transcurrido en cada ciclo de uso, tomando como referencia timestamps controlados por la propia ejecución del protocolo. Esta validación no requiere ningún patrón de medición externo: alcanza con conocer, para cada ciclo, el instante real de inicio y de fin del escaneo, y comparar la diferencia contra el valor calculado por el sistema. Es la validación que se ejecuta en la prueba de concepto (etapa 3, ver 4.4).",
+        "Nivel 1 — Exactitud e integridad del cálculo end-to-end (empírico, validado en esta etapa). No se reduce a verificar que la fórmula de cálculo de horas funcione a nivel de software, verificación que se realiza mediante pruebas unitarias automatizadas del código. En cambio, valida la integridad, la persistencia y la canalización del flujo de datos: desde el evento de escaneo del código QR en el navegador del dispositivo, atravesando la red pública, hasta el registro persistente en la base de datos y su posterior recuperación al cierre del ciclo. Se demuestra en la práctica que, ante microcortes de conectividad, latencias variables y reintentos automáticos, la base de datos conserva la coherencia lógica de los registros —no se pierden eventos, no se duplican, no se corrompen los timestamps— y las horas acumuladas por el sistema mantienen su exactitud contra el tiempo real transcurrido en cada ciclo. Como referencia se toman timestamps controlados por la propia ejecución del protocolo: no requiere ningún patrón de medición externo, alcanza con conocer, para cada ciclo, el instante real de inicio y de fin del escaneo. Es la validación que se ejecuta en la prueba de concepto (etapa 3, ver 4.4).",
       ),
     ),
     parrafo(
       negro(
-        "Nivel 2 — Contraste con una medición independiente (teórico en esta etapa, requiere piloto real). Consiste en contrastar las horas acumuladas por el sistema contra una fuente de medición externa al propio sistema: el horómetro interno del ventilador mecánico. El ventilador cumple así un doble rol, como equipo registrado por el sistema y, simultáneamente, como patrón de contraste independiente. Este nivel de validación exige contar con el equipo físico y con su uso clínico real, condición que excede el alcance de un entorno controlado y doméstico como el de la prueba de concepto de este trabajo. Por ello, el mecanismo que lo hace operativo —el registro de lecturas de horómetro y el cálculo del desvío entre ambas fuentes, descripto en 5.4.1— se incorpora al diseño y al prototipo como propuesta metodológica lista para usarse, mientras que su ejecución empírica se difiere a una prueba piloto en un entorno hospitalario real (ver 6.4).",
+        "Nivel 2 — Contraste con una medición independiente (teórico en esta etapa; su ejecución empírica excede el alcance de este trabajo). Consiste en contrastar las horas acumuladas por el sistema contra una fuente de medición externa al propio sistema: el horómetro interno del ventilador mecánico. El ventilador cumple así un doble rol, como equipo registrado por el sistema y, simultáneamente, como patrón de contraste independiente. Este nivel de validación exige contar con el equipo físico y con su uso clínico real, condición que excede el alcance de un entorno controlado y doméstico como el de la prueba de concepto de este trabajo. Por ello, el mecanismo que lo hace operativo —el registro de lecturas de horómetro y el cálculo del desvío entre ambas fuentes, descripto en 5.4.1— se incorpora al diseño y al prototipo como propuesta metodológica lista para usarse, mientras que su ejecución empírica queda como propuesta hipotética a resolver en una eventual implementación futura en entorno hospitalario (ver 6.4).",
       ),
     ),
 
@@ -446,7 +463,7 @@ function seccionMetodologia(): (Paragraph | Table)[] {
       "Protocolo de carga dinámica. Durante un período acotado se aplica un protocolo de escaneo que simula ingresos, altas y rotación de equipos conforme al escenario de referencia, utilizando smartphones reales, para evaluar la usabilidad del QR bajo distintas condiciones de luz y la tasa de errores de lectura.",
     ),
     item(
-      "Validación de infraestructura de red y persistencia. Se monitorea el impacto de los eventos en la base de datos en la nube, probando la tolerancia del sistema a microcortes de conectividad, la latencia de sincronización y la exactitud de la acumulación de horas (nivel 1 de la estrategia de validación, 4.3).",
+      "Validación de infraestructura de red y persistencia. Se monitorea el impacto de los eventos en la base de datos en la nube, probando la tolerancia del sistema a microcortes de conectividad, la latencia de sincronización y la exactitud de la acumulación de horas (nivel 1 de la estrategia de validación, 4.3). Esta etapa se ejecuta en los días 3, 7 y 11 del protocolo, con cinco cortes de red forzados por día (total quince cortes) y tres mediciones de exactitud de horas por día distribuidas entre los turnos mañana, tarde y noche (total nueve mediciones), de modo de contar con un tamaño de muestra suficiente para caracterizar el comportamiento del sistema en distintas condiciones operativas del día.",
     ),
     item(
       "Prueba de stress y disparo de alertas. Se fuerzan escenarios críticos de sobreuso para verificar que el tablero procesa el indicador y dispara correctamente la alerta de mantenimiento.",
@@ -471,12 +488,12 @@ function seccionMetodologia(): (Paragraph | Table)[] {
     ),
     parrafo(
       negro(
-        "Este criterio excluye deliberadamente del alcance de validación del presente trabajo a equipamiento itinerante de uso puntual, como ecógrafos, electrocardiógrafos y equipos de radiología portátil, aun cuando también constituyen equipamiento crítico del hospital. El fundamento de esta exclusión es doble. En primer lugar, el mecanismo de registro propuesto captura el inicio y el fin de cada ciclo de uso mediante el escaneo del código QR, por lo que la relación señal-ruido de la medición depende directamente de la duración del ciclo de uso frente al tiempo que insume el propio acto de escanear. En los equipos de cama —bombas de infusión, monitores y ventiladores—, cuyos ciclos se extienden por horas o días, el tiempo de escaneo resulta despreciable frente a la duración del ciclo, y el dato de horas resultante es confiable. En los equipos itinerantes, en cambio, el uso efectivo puede durar apenas unos minutos —el tiempo de un estudio o de una toma—, mientras que el escaneo de activación y desactivación insume un tiempo comparable al del propio uso, lo que introduce un margen de error relativo elevado y vuelve ruidosa la medición de horas. En segundo lugar, el desgaste de estos equipos no correlaciona con las horas de funcionamiento: un equipo de radiología se desgasta principalmente por la cantidad de disparos realizados, y un electrocardiógrafo por la cantidad de estudios efectuados, no por el tiempo que el equipo permanece encendido. En consecuencia, aun si se registrara con precisión el tiempo de uso de estos equipos, ese dato no resultaría un buen predictor de su desgaste ni un insumo útil para programar su mantenimiento.",
+        "Este criterio excluye deliberadamente del alcance de validación del presente trabajo a equipamiento itinerante de uso puntual, como ecógrafos, electrocardiógrafos y equipos de radiología portátil, aun cuando también constituyen equipamiento crítico del hospital. El fundamento de esta exclusión es doble. En primer lugar, el mecanismo de registro propuesto captura el inicio y el fin de cada ciclo de uso mediante el escaneo del código QR, por lo que la relación señal-ruido de la medición depende directamente de la duración del ciclo de uso frente al tiempo que insume el propio acto de escanear. En los equipos de cama —bombas de infusión, monitores y ventiladores—, cuyos ciclos se extienden por horas o días, el tiempo de escaneo resulta despreciable frente a la duración del ciclo, y el dato de horas resultante es confiable. En los equipos itinerantes, en cambio, el uso efectivo puede durar apenas unos minutos —el tiempo de un estudio o de una toma—, mientras que el escaneo de activación y desactivación insume un tiempo comparable al del propio uso, lo que introduce un margen de error relativo elevado y vuelve ruidosa la medición de horas. A modo ilustrativo: un ciclo típico de bomba de infusión dura del orden de ocho horas (aproximadamente 28.800 segundos); un escaneo de activación y otro de desactivación insumen del orden de cinco segundos en total, por lo que el error relativo introducido por el instante del escaneo es del orden del 0,017%. Un estudio de radiografía portátil, en cambio, dura del orden de tres minutos (180 segundos); con el mismo tiempo de escaneo de cinco segundos, el error relativo sube al 2,8%, más de ciento sesenta veces mayor. En segundo lugar, el desgaste de estos equipos no correlaciona con las horas de funcionamiento: un equipo de radiología se desgasta principalmente por la cantidad de disparos realizados, y un electrocardiógrafo por la cantidad de estudios efectuados, no por el tiempo que el equipo permanece encendido. En consecuencia, aun si se registrara con precisión el tiempo de uso de estos equipos, ese dato no resultaría un buen predictor de su desgaste ni un insumo útil para programar su mantenimiento.",
       ),
     ),
     parrafo(
       negro(
-        "Cabe aclarar que esta acotación es un límite del alcance de validación del presente trabajo, no una limitación del software desarrollado. El sistema es genérico: el campo que identifica el tipo de equipo es de texto libre, por lo que cualquier institución puede dar de alta y monitorear cualquier tipo de equipo biomédico con un ciclo de uso identificable, sin modificar el código. Lo que este trabajo acota, por razones metodológicas vinculadas a la relación señal-ruido de la medición y a la correlación entre horas y desgaste, es el conjunto de equipos sobre el cual se sostienen las conclusiones de validez del sistema: los tres tipos de equipo de cama de alto uso horario mencionados.",
+        "Es importante enfatizar que esta acotación constituye una delimitación de alcance por idoneidad de la métrica del sistema —la medición del tiempo de funcionamiento acumulado—, y no una limitación de la herramienta desarrollada. La trazabilidad de los equipos itinerantes requiere métricas propias de conteo de eventos —cantidad de estudios realizados, cantidad de disparos, cantidad de tomas— que exceden el paradigma de medición por tiempo sobre el que este trabajo se estructura. Consecuentemente, incorporar estos equipos al alcance de validación no aportaría datos significativos al problema que el sistema propone resolver, aun cuando el software pueda registrarlos operativamente. El sistema es genérico en su implementación: el campo que identifica el tipo de equipo es de texto libre, por lo que cualquier institución puede dar de alta y monitorear cualquier tipo de equipo biomédico con un ciclo de uso identificable, sin modificar el código. Un ejemplo directo de extensión inmediata es el de las bombas de alimentación enteral y parenteral, que comparten con las bombas de infusión el paradigma de medición por tiempo, el patrón de asignación por paciente y el ciclo de uso prolongado, y cuya inclusión en el sistema requiere únicamente darlas de alta desde la pantalla de alta de equipo. Estas bombas cumplen técnicamente los tres criterios de inclusión antes enunciados; sin embargo, la fuente principal utilizada para parametrizar el escenario de referencia (Informe SATI-Q UCI Adultos 2025) releva días-cama con asistencia respiratoria mecánica, con catéter venoso central y con sonda vesical, pero no reporta prevalencia de nutrición enteral ni parenteral a nivel del parque de infusores. Incluir bombas de alimentación en el escenario de validación exigiría introducir supuestos adicionales sin sustento en la fuente principal, lo que debilitaría la trazabilidad del escenario. Por consistencia metodológica con la fuente, el alcance de validación se restringe a los tres tipos cuyos parámetros de carga pueden fundamentarse directamente sobre el informe SATI-Q. En síntesis, lo que este trabajo acota es el conjunto de equipos sobre el cual se sostienen las conclusiones de validez del sistema —los tres tipos de equipo de cama de alto uso horario mencionados—, por razones metodológicas vinculadas a la idoneidad de la métrica del sistema para caracterizar el desgaste de cada tipo de equipamiento y a la trazabilidad de los parámetros del escenario respecto de la fuente utilizada.",
       ),
     ),
   ];
@@ -499,7 +516,7 @@ function seccionResultados(): (Paragraph | Table)[] {
     titulo("5.1.1. Identificación del equipamiento", 3),
     parrafo(
       negro(
-        "Cada equipo se identifica mediante un código QR único adherido al dispositivo. El código contiene un identificador alfanumérico que permite reconocer unívocamente cada equipo. La información asociada incluye: número de inventario institucional, tipo de equipo, marca y modelo, fecha de adquisición y umbral de horas para mantenimiento preventivo. Se optó por códigos QR frente a otras tecnologías (RFID, NFC) por su menor costo, por no requerir hardware especializado de lectura, por poder leerse con dispositivos móviles estándar y por su resistencia a las condiciones de limpieza hospitalaria cuando se imprimen en materiales apropiados.",
+        "Cada equipo se identifica mediante un código QR único adherido al dispositivo. El código contiene un identificador alfanumérico que actúa como número de inventario institucional único del equipo dentro del sistema. La información asociada al identificador incluye: tipo de equipo, marca, modelo, número de serie del fabricante, fecha de alta en el sistema y umbral de horas para mantenimiento preventivo. Se optó por códigos QR frente a otras tecnologías (RFID, NFC) por su menor costo, por no requerir hardware especializado de lectura, por poder leerse con dispositivos móviles estándar y por su resistencia a las condiciones de limpieza hospitalaria cuando se imprimen en materiales apropiados —lo que corresponde a la política de impresión que cada institución adopte al desplegar el sistema, no al software en sí—.",
       ),
     ),
     titulo("5.1.2. Registro de uso", 3),
@@ -527,7 +544,7 @@ function seccionResultados(): (Paragraph | Table)[] {
     titulo("5.1.3. Estructura de datos", 3),
     parrafo(
       negro(
-        "El sistema almacena, a nivel funcional, tres tipos de registros: Equipo (ID, tipo, marca, modelo, fecha de adquisición, umbral de horas, horas acumuladas, estado); Ciclo de uso (ID del ciclo, ID del equipo, timestamps de inicio y fin, horas del ciclo, ubicación); y Mantenimiento (ID, ID del equipo, fecha, tipo, descripción, horas al momento, técnico responsable). El modelo de datos efectivamente implementado en el prototipo, que amplía esta estructura funcional con las tablas de fallas y de lecturas de horómetro, se detalla en 5.4.1.",
+        "El sistema almacena, a nivel funcional, tres tipos de registros: Equipo (identificador único que actúa como número de inventario, tipo, marca, modelo, número de serie, fecha de alta en el sistema, umbral de horas, horas acumuladas, estado); Ciclo de uso (identificador del ciclo, identificador del equipo, timestamps de inicio y fin, horas del ciclo, ubicación); y Mantenimiento (identificador del ciclo, identificador del equipo, fecha, tipo, descripción, horas al momento, técnico responsable). El modelo de datos efectivamente implementado en el prototipo, que amplía esta estructura funcional con las tablas de fallas y de lecturas de horómetro, se detalla en 5.4.1.",
       ),
     ),
 
@@ -538,7 +555,7 @@ function seccionResultados(): (Paragraph | Table)[] {
       [
         [
           "Horas acumuladas por equipo (HAM)",
-          "Tiempo total de funcionamiento desde la última intervención: HAM = Σ(t_finᵢ − t_inicioᵢ) para i = 1 a n sesiones desde el último mantenimiento.",
+          "Tiempo total de funcionamiento del equipo desde la última intervención de mantenimiento, calculado en tiempo real al momento de la consulta. Incluye dos componentes: (a) la suma de las duraciones de todos los ciclos cerrados desde el último mantenimiento —suma de (t_fin_i − t_inicio_i) para i = 1..n, con n = cantidad de ciclos cerrados—; y (b) el tiempo transcurrido desde el inicio del ciclo actualmente abierto, si el equipo se encuentra en uso al momento de la consulta. Esta política asegura que las alertas de mantenimiento próximo y de vencido se disparen en el instante en que el equipo cruza el umbral, aun cuando lo haga durante un ciclo de uso prolongado, sin depender de que el ciclo se cierre.",
         ],
         [
           "Alerta de mantenimiento próximo (AMP)",
@@ -568,7 +585,7 @@ function seccionResultados(): (Paragraph | Table)[] {
     titulo("5.3. Umbrales de mantenimiento", 2),
     parrafo(
       negro(
-        "Los umbrales de horas se determinan siguiendo una jerarquía de fuentes: en primer lugar, las recomendaciones del fabricante documentadas en el manual técnico; cuando el fabricante no documenta un umbral en horas —situación habitual en bombas y monitores de gama media—, se estima a partir del análisis de datos históricos de fallas del servicio de Ingeniería Clínica; y en ausencia de datos propios, se recurre a la literatura y a organismos de referencia (OMS, AAMI). A modo orientativo: bombas de infusión volumétricas (4.000–6.000 h), monitores multiparamétricos (8.000–10.000 h) y ventiladores mecánicos (5.000–8.000 h). Estos valores deben calibrarse según las condiciones de cada institución.",
+        "Los umbrales de horas se determinan siguiendo una jerarquía de fuentes: en primer lugar, las recomendaciones del fabricante documentadas en el manual técnico; cuando el fabricante no documenta un umbral en horas —situación habitual en bombas y monitores de gama media—, se estima a partir del análisis de datos históricos de fallas del servicio de Ingeniería Clínica; y en ausencia de datos propios, se recurre a la literatura y a organismos de referencia (OMS, AAMI). A modo orientativo, y como valores compatibles con la vida útil operativa esperable habitualmente documentada por fabricantes de gama media para estos tipos de equipo: bombas de infusión volumétricas (4.000–6.000 h), monitores multiparamétricos (8.000–10.000 h) y ventiladores mecánicos (5.000–8.000 h). Estos rangos son orientativos y surgen de la práctica de gestión hospitalaria; no constituyen umbrales normativos. Cada institución debe calibrar sus umbrales a partir de: (a) el manual del fabricante del equipo específico, (b) los datos históricos de fallas del propio Servicio de Ingeniería Clínica y (c) recomendaciones de organismos como AAMI y OMS. El sistema permite editar el umbral equipo por equipo, junto con los porcentajes de aviso y de vencido (ver 5.4.1).",
       ),
     ),
 
@@ -673,11 +690,29 @@ function seccionResultados(): (Paragraph | Table)[] {
     item(
       "Replicabilidad. Al ser de código abierto y desplegable sobre servicios gratuitos, cualquier hospital puede clonar el repositorio, crear su propia base de datos y desplegar el sistema de forma autónoma.",
     ),
+    item(
+      "Actualización automática del tablero. El tablero de Ingeniería Clínica revalida sus datos cada treinta segundos sin recarga completa de la página, y suspende automáticamente la revalidación cuando la pestaña del navegador queda oculta para no consumir recursos de cómputo. Con esta política, el estado del parque exhibido al servicio es una fotografía cuasi inmediata del sistema, sin depender de que el usuario refresque manualmente.",
+    ),
 
     titulo("5.4.4. Prototipo desarrollado", 3),
     parrafo(
+      negro(
+        "El prototipo se implementó conforme a la arquitectura descripta y se encuentra públicamente disponible bajo licencia MIT. El código fuente se aloja en un repositorio abierto de GitHub, y la aplicación se desplegó de forma continua sobre la plataforma Vercel, respaldada por una base de datos PostgreSQL gestionada en Neon. Cualquier institución interesada puede clonar el repositorio, cargar el esquema de base de datos incluido en el propio proyecto, poblarlo con su parque de equipos y desplegar una instancia propia sin costo y sin escribir código adicional.",
+      ),
+    ),
+    parrafo(
+      negro(
+        "Repositorio del código fuente: https://github.com/yamirayts/horus",
+      ),
+    ),
+    parrafo(
+      negro(
+        "Aplicación desplegada: https://horus-bice-phi.vercel.app",
+      ),
+    ),
+    parrafo(
       verde(
-        "[COMPLETAR — URL del repositorio público en GitHub, URL de la app desplegada en Vercel, y capturas de pantalla como Figuras 1-3: (a) pantalla de escaneo con confirmación de acción, (b) detalle de un equipo con horas acumuladas y contraste con horómetro, (c) tablero de control con alertas AMP y vencidos. Las imágenes se incorporan como figuras y no cuentan en la extensión.]",
+        "[COMPLETAR — capturas de pantalla como Figuras 1-4: (a) tablero de Ingeniería Clínica con panel de alertas y KPIs por tipo de equipo, (b) pantalla de escaneo con confirmación de acción y desplegable de cama, (c) detalle de un equipo con horas acumuladas y sección de contraste con horómetro, (d) pantalla de generación e impresión de etiquetas QR. Las imágenes se incorporan como figuras y no cuentan en la extensión.]",
       ),
     ),
 
@@ -743,7 +778,21 @@ function seccionDiscusion(): (Paragraph | Table)[] {
     titulo("6.1.2. Viabilidad operativa", 3),
     parrafo(
       negro(
-        "El acto de escanear un código QR toma pocos segundos y coincide con acciones que el personal ya realiza (conectar/desconectar equipos), por lo que no agrega una tarea nueva sino que instrumenta digitalmente una acción existente. Un factor de riesgo es la dependencia del factor humano para el registro, mitigable mediante capacitación, recordatorios, indicadores de cumplimiento por turno y alertas visuales cuando un equipo en uso no tiene registro de activación.",
+        "El acto de escanear un código QR agrega entre cinco y diez segundos por evento de asignación o desasignación al flujo de trabajo del personal, tiempo que se integra al gesto natural de conectar o desconectar el equipo del paciente. Este incremento por evento es reducido en términos absolutos, pero no es cero, y su acumulación a lo largo de un turno con varias asignaciones debe considerarse en el análisis operativo. Se opta por instrumentar digitalmente una acción existente en el flujo asistencial —la asignación del equipo a la cama— en lugar de introducir una tarea nueva desvinculada de dicho flujo.",
+      ),
+    ),
+    parrafo(
+      negro(
+        "El principal factor de riesgo del sistema no reside en la falla tecnológica, sino en la posibilidad de omisión del escaneo por parte del personal de enfermería en situaciones de urgencia o alta carga asistencial. Un equipo asignado a un paciente sin registro de activación en el sistema no comienza a acumular horas, y un equipo desasignado sin registro de desactivación queda con un ciclo abierto indefinido que distorsiona sus indicadores. Para mitigar este riesgo se prevén los siguientes mecanismos de control operativo, todos ellos instrumentables desde el propio sistema o desde el flujo de trabajo del Servicio de Ingeniería Clínica:",
+      ),
+    ),
+    item("Regla de negocio de ciclo atípicamente largo. El sistema puede detectar equipos que figuran con estado \"en uso\" durante un tiempo continuo superior a un umbral configurable —por ejemplo, cuarenta y ocho horas para una bomba de infusión o siete días para un ventilador—, y exhibir esa condición como anomalía en el tablero de Ingeniería Clínica, lo que permite detectar activaciones sin su correspondiente desactivación. Esta regla se enuncia como propuesta de mejora inmediata sobre el prototipo actual."),
+    item("Rutinas de conciliación periódica. Se propone que el Servicio de Ingeniería Clínica realice una conciliación semanal entre el estado registrado por el sistema (a través de la lista de equipos y el tablero) y el estado físico observado en la sala. Cualquier discrepancia se registra como observación y permite ajustar prospectivamente el estado del sistema."),
+    item("Capacitación específica y recordatorios visuales. Sensibilización del personal sobre el impacto del registro completo en la disponibilidad futura del equipo, complementada con señalética en el punto de uso que refuerce el gesto de escaneo al inicio y al fin de cada asignación."),
+    item("Indicadores de cumplimiento por turno. En una futura versión del tablero (ver 7.1), incorporar métricas de cumplimiento del registro por turno, para retroalimentar a los equipos de enfermería con evidencia agregada."),
+    parrafo(
+      negro(
+        "La validación empírica del impacto operativo real de esta instrumentación sobre la carga de trabajo del turno y la evaluación cuantitativa de la tasa de omisión bajo condiciones asistenciales excede el alcance de la prueba de concepto de este trabajo y queda como brecha explícita a resolver en una eventual implementación futura en entorno hospitalario (ver 6.4).",
       ),
     ),
     titulo("6.1.3. Viabilidad normativa", 3),
@@ -769,14 +818,14 @@ function seccionDiscusion(): (Paragraph | Table)[] {
         [
           "Contraste con medición independiente (horómetro) (nivel 2)",
           "No validado en esta etapa",
-          "Piloto real con el ventilador como patrón de contraste",
+          "Fuera del alcance del presente trabajo (requeriría equipamiento hospitalario real)",
         ],
-        ["Adopción real y comportamiento del personal de enfermería", "No", "Piloto real; literatura sobre adopción de tecnología en enfermería"],
-        ["Patrones de error por fatiga a escala de turno", "No", "Piloto real con muestreo; literatura sobre error humano en UCI"],
+        ["Adopción real y comportamiento del personal de enfermería", "No", "Fuera del alcance del presente trabajo; sostenido con literatura sobre adopción de tecnología en enfermería"],
+        ["Patrones de error por fatiga a escala de turno", "No", "Fuera del alcance del presente trabajo; sostenido con literatura sobre error humano en UCI"],
         [
           "Concurrencia real de decenas de equipos en simultáneo",
           "Parcial (simulada según escenario de referencia)",
-          "Modelado de carga + validación en piloto real",
+          "Modelado de carga + validación en eventual implementación futura",
         ],
         ["Factores institucionales / resistencia al cambio", "No", "Estrategia de sensibilización + evaluación en implementación real"],
       ],
@@ -793,12 +842,12 @@ function seccionDiscusion(): (Paragraph | Table)[] {
     titulo("6.4. Limitaciones y hoja de ruta", 2),
     parrafo(
       negro(
-        "El trabajo valida empíricamente la capa técnica de captura y procesamiento del dato, no la efectividad clínica del mantenimiento basado en condición —que la literatura ya discute— ni la dinámica organizacional real de una UCI. La prueba se realiza en un entorno controlado con un escenario de referencia parametrizado mediante supuestos declarados; por lo tanto, la generalización a un entorno hospitalario real requiere las etapas de validación indicadas en la matriz (6.2). Como hoja de ruta hacia una implementación real se propone: (1) una prueba piloto en una UCI con acompañamiento de Ingeniería Clínica, que permita ejecutar el nivel 2 de la estrategia de validación (contraste con el horómetro del ventilador, 4.3); (2) un estudio de adopción y usabilidad con personal de enfermería; y (3) —si se buscara demostrar la utilidad del mantenimiento basado en condición— un control de calibración periódico contrastado con las horas de uso acumuladas, para analizar la correlación entre desvío de calibración y horas.",
+        "El trabajo valida empíricamente la capa técnica de captura y procesamiento del dato, no la efectividad clínica del mantenimiento basado en condición —que la literatura ya discute— ni la dinámica organizacional real de una UCI. La prueba se realiza en un entorno controlado con un escenario de referencia parametrizado mediante supuestos declarados; por lo tanto, la generalización a un entorno hospitalario real requeriría las etapas de validación indicadas en la matriz (6.2). Como hoja de ruta hipotética hacia una eventual implementación futura en entorno hospitalario se sugerirían: (1) una implementación en producción acompañada por el Servicio de Ingeniería Clínica, que permitiría ejecutar el nivel 2 de la estrategia de validación (contraste con el horómetro del ventilador, 4.3); (2) un estudio de adopción y usabilidad con personal de enfermería; y (3) —si se buscara demostrar la utilidad del mantenimiento basado en condición— un control de calibración periódico contrastado con las horas de uso acumuladas, para analizar la correlación entre desvío de calibración y horas. Esta hoja de ruta es propositiva y su ejecución no forma parte del presente trabajo.",
       ),
     ),
     parrafo(
       negro(
-        "En relación con el nivel 2 de la estrategia de validación descripta en 4.3 —el contraste con una medición independiente de las horas de uso—, se evaluó como alternativa instrumentar dicho contraste mediante un sensor de corriente conectado al equipo, bajo el supuesto de que el consumo eléctrico permitiría inferir el tiempo de funcionamiento efectivo. Esta alternativa se descartó: los ventiladores mecánicos y las bombas de infusión utilizados en UCI poseen baterías internas que se recargan de forma continua mientras el equipo permanece conectado a la red eléctrica, esté o no en uso sobre un paciente. En consecuencia, el consumo de corriente durante la carga de la batería se confundiría con el consumo asociado al uso real del equipo, lo que comprometería la validez de la medición como patrón de contraste. Por este motivo se optó por proponer el horómetro interno del ventilador —que registra directamente el tiempo de funcionamiento del equipo y no su consumo eléctrico— como fuente de contraste confiable, según se describe en 4.3 (nivel 2) y en el modelo de datos (5.4.1).",
+        "En relación con el nivel 2 de la estrategia de validación descripta en 4.3 —el contraste con una medición independiente de las horas de uso—, se evaluó como alternativa instrumentar dicho contraste mediante un sensor de corriente conectado al equipo, bajo el supuesto de que el consumo eléctrico permitiría inferir el tiempo de funcionamiento efectivo. Esta alternativa se descartó por un motivo principal —el principio de parsimonia y costo-efectividad que fundamenta el diseño del sistema— y un motivo técnico complementario. Desde la perspectiva de costo-efectividad: los ventiladores mecánicos y las bombas de infusión utilizados en UCI poseen baterías internas que se recargan de forma continua mientras el equipo permanece conectado a la red eléctrica, esté o no en uso sobre un paciente. Discriminar el consumo asociado a la carga de la batería del consumo asociado al uso real del equipo exigiría sensores inteligentes de firma eléctrica y una etapa de procesamiento de señal específica por tipo y modelo de equipo. Aun cuando esa discriminación es técnicamente abordable con instrumentación adecuada, el hardware y el desarrollo necesarios contradicen el objetivo central de este trabajo, que es ofrecer una solución de bajo costo y fácil replicabilidad en el hospital público provincial —sin sensores adicionales por equipo, sin licencias comerciales, sin infraestructura de captura permanente—. Se evaluaron y descartaron por la misma razón otras alternativas: un temporizador externo dedicado por equipo, y la extracción de registros operativos internos del propio equipo mediante interfaces del fabricante. Todas exigen hardware o software específico por equipo, o acceso a interfaces propietarias con licencias comerciales. Complementariamente, en el caso puntual del sensor de corriente, el desafío técnico de la discriminación del consumo por batería agrega complejidad al problema. Por estos motivos se optó por proponer el horómetro interno del ventilador —que registra directamente el tiempo de funcionamiento del equipo y no su consumo eléctrico, y es accesible sin hardware adicional— como fuente de contraste confiable para el nivel 2, según se describe en 4.3 y en el modelo de datos (5.4.1).",
       ),
     ),
   ];
@@ -822,7 +871,7 @@ function seccionConclusiones(): Paragraph[] {
     item(
       "El diseño incluye indicadores alineados con la norma EN 15341:2019 que habilitan una gestión del mantenimiento basada en evidencia de uso: horas acumuladas, alertas de mantenimiento próximo, tasa de uso, disponibilidad, historial, proyección y tiempo medio entre fallas.",
     ),
-    item("El prototipo demuestra que el sistema puede construirse con tecnología accesible, de bajo costo y de acceso abierto, sin infraestructura especializada."),
+    item("El prototipo evidencia que el sistema puede construirse con tecnología accesible, de bajo costo y de acceso abierto, sin infraestructura especializada, y desplegarse en producción sobre servicios en la nube de plan gratuito."),
     itemVerde(
       "[COMPLETAR — conclusión sobre los resultados de la prueba de concepto: en qué medida se validó la robustez técnica de la infraestructura de datos (captura por QR, tolerancia a red/persistencia, exactitud de acumulación y disparo de alertas), con las cifras cuantitativas resumen.]",
     ),
@@ -830,15 +879,22 @@ function seccionConclusiones(): Paragraph[] {
       "El análisis de viabilidad indica que no existen barreras técnicas, operativas ni normativas insalvables para una eventual implementación; el factor crítico identificado es la adherencia del personal al registro, abordable mediante estrategias de sensibilización.",
     ),
     titulo("7.1. Recomendaciones", 2),
-    item("Realizar una prueba piloto en una UCI real, con acompañamiento del Servicio de Ingeniería Clínica, antes de escalar."),
-    item("Involucrar al personal de enfermería en el diseño de la interfaz de usuario."),
-    item("Calibrar los umbrales de mantenimiento según las recomendaciones específicas de los fabricantes y los datos históricos de la institución."),
-    item("Evaluar la integración con los sistemas de gestión de mantenimiento existentes."),
-    item("Documentar los resultados de la implementación piloto para facilitar la replicación en otros hospitales."),
+    parrafo(negro("Las siguientes recomendaciones aplican a una eventual implementación futura del sistema en entorno hospitalario y no forman parte del presente trabajo:")),
+    item("Como estrategia de escalamiento, se sugeriría iniciar con un único tipo de equipo —preferentemente bombas de infusión, por ser el de mayor rotación y volumen de eventos diarios—, durante un período de tres a seis meses, midiendo la tasa de adopción del registro por parte del personal de enfermería y la correlación entre horas registradas y mantenimientos ejecutados. El escalamiento al resto del parque en función de los resultados permitiría incorporar en etapas posteriores otros equipos de asignación por paciente con ciclo de uso prolongado (por ejemplo, bombas de alimentación enteral y parenteral)."),
+    item("La ejecución del nivel 2 de la estrategia de validación (contraste horómetro de ventilador vs. horas del sistema, 4.3) requeriría el acompañamiento directo del Servicio de Ingeniería Clínica sobre equipamiento hospitalario real."),
+    item("Se sugeriría involucrar al personal de enfermería en la validación de la interfaz de usuario y en la definición de indicadores de cumplimiento por turno para una futura versión del tablero."),
+    item("Los umbrales de mantenimiento deberían calibrarse según las recomendaciones específicas de los fabricantes y los datos históricos de la institución, aprovechando la capacidad del sistema de editar umbrales por equipo."),
+    item("Convendría evaluar la integración con los sistemas de gestión de mantenimiento (CMMS) existentes, mediante export de datos o la API HTTP del sistema."),
+    item("Los resultados de una eventual implementación futura podrían documentarse en un informe operativo público que permitiera replicar la experiencia en otros hospitales, aprovechando que el código y la infraestructura son de acceso abierto."),
     titulo("7.2. Limitaciones del trabajo", 2),
     parrafo(
       negro(
-        "La validación empírica se circunscribe a la infraestructura de datos en un entorno controlado; no comprende la validación clínica del mantenimiento basado en condición ni la dinámica organizacional de una UCI real. Los umbrales de mantenimiento y los costos son referenciales y deben ajustarse a cada institución.",
+        "La validación empírica se circunscribe a la infraestructura de datos en un entorno controlado; no comprende la validación clínica del mantenimiento basado en condición ni la dinámica organizacional de una UCI real. Los umbrales de mantenimiento y los costos son referenciales y deberían ajustarse a cada institución.",
+      ),
+    ),
+    parrafo(
+      negro(
+        "Otra limitación del alcance del presente trabajo es que la validación empírica no cubre bombas de alimentación enteral y parenteral, cuya prevalencia no se encuentra reportada en la fuente principal utilizada para parametrizar el escenario de referencia (SATI-Q). Su inclusión operativa en el sistema no requiere modificar el código —el campo de tipo de equipo es de texto libre, según se detalla en 4.5—; su inclusión en la validación empírica quedaría fuera del alcance de este trabajo por consistencia metodológica con la fuente del escenario.",
       ),
     ),
   ];
@@ -862,6 +918,7 @@ function seccionReferencias(): Paragraph[] {
     referencia("Ministerio de Salud de la Provincia de Buenos Aires. (s.f.). Sistema de Atención Médica Organizada (SAMO)."),
     referencia("Organización Mundial de la Salud. (2012). Introducción al programa de mantenimiento de equipos médicos. Serie de documentos técnicos de la OMS sobre dispositivos médicos. Ginebra: OMS."),
     referencia("Pereira, M. T., Silva, I. N. S., Lima, J. F. P., et al. (2023). Precision and reliability study of hospital infusion pumps: a systematic review. BioMedical Engineering OnLine, 22(1), 26."),
+    referencia("República Argentina. (2000). Ley 25.326 de Protección de los Datos Personales. Boletín Oficial de la República Argentina, 2 de noviembre de 2000."),
     referencia("Sociedad Argentina de Terapia Intensiva. (2025). Informe SATI-Q UCI Adultos 2025. Programa SATI-Q. Recuperado de https://archive.org/download/resultado-2025/info2025.pdf"),
     referencia("Wang, B., Rui, T., & Balar, S. (2013). An estimate of patient incidents caused by medical equipment maintenance omissions. Biomedical Instrumentation & Technology, 47(1), 84-91."),
   ];
@@ -899,6 +956,23 @@ function seccionAnexos(): Paragraph[] {
         "[COMPLETAR — protocolo detallado efectivamente ejecutado: lista de gemelos y sus QR, cronograma de carga (referenciar cronograma.md), planilla de registro de escaneos completada (planilla-registro.csv), escenarios de corte de red y de stress ejecutados, y planilla de resultados por etapa.]",
       ),
     ),
+
+    titulo("Anexo E — Protocolo del Nivel 2 de validación (contraste con horómetro)", 2),
+    parrafo(
+      negro(
+        "Este anexo formaliza el protocolo del Nivel 2 de la estrategia de validación descripta en 4.3. Su ejecución empírica excede el alcance del presente trabajo por requerir equipamiento hospitalario real; el protocolo se documenta aquí para dejar operativo el mecanismo de contraste y facilitar su ejecución en una eventual continuación del proyecto en un entorno hospitalario.",
+      ),
+    ),
+    parrafo(negro("Objetivo: verificar la exactitud de las horas acumuladas por el sistema mediante el contraste contra el horómetro interno del ventilador mecánico, tomado como patrón de medición independiente.")),
+    parrafo(negro("Requisitos: acceso físico a un ventilador mecánico en uso clínico, con horómetro interno funcional y accesible; instalación del sistema con el equipo dado de alta y en operación real; período de observación mínimo sugerido de treinta días.")),
+    parrafo(negro("Procedimiento:")),
+    item("Momento 0. Al iniciar el período de observación, registrar en la aplicación una lectura del horómetro interno del equipo mediante la pantalla de detalle del equipo. El sistema guarda la lectura junto con las horas que el propio sistema acumula en ese mismo momento (referencia inicial)."),
+    item("Operación. Durante el período de observación, el equipo se utiliza en su régimen clínico habitual, con el personal escaneando el código QR en cada asignación y desasignación conforme al flujo descripto en 5.1.2."),
+    item("Momentos intermedios (opcionales). Se sugieren lecturas intermedias cada siete o diez días, para poder observar la evolución del desvío en el tiempo."),
+    item("Momento final. Al cierre del período, registrar una nueva lectura del horómetro y las horas del sistema en ese instante."),
+    item("Cálculo. El sistema calcula el desvío absoluto (horas del sistema menos horas del horómetro en el intervalo) y el desvío porcentual respecto de las horas del horómetro. Ambos valores se exhiben en la pantalla de detalle del equipo (5.4.1)."),
+    parrafo(negro("Criterio de aceptación operativo (sugerido): desvío porcentual absoluto menor o igual al 2% en el intervalo observado. Un desvío mayor indicaría eventos no registrados por el personal (omisiones de escaneo) o inconsistencias en el flujo de captura que deberían investigarse.")),
+    parrafo(negro("Resultado esperado del protocolo: caracterización empírica del grado de correspondencia entre las horas registradas por el sistema y las horas efectivamente acumuladas por el equipo, lo que permite validar cuantitativamente la exactitud de la acumulación bajo condiciones de uso real, más allá de la validación de la integridad del flujo de datos ejecutada en el Nivel 1.")),
   ];
 }
 

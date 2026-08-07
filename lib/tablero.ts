@@ -1,8 +1,9 @@
 import { listarEquipos, type Equipo } from "@/lib/db/equipos";
 import { listarFallasDesde } from "@/lib/db/fallas";
-import { sumarHorasPorEquipoDesde } from "@/lib/db/ciclos";
+import { sumarHorasPorEquipoDesde, iniciosDeCiclosAbiertos } from "@/lib/db/ciclos";
 import { estadoAlerta, pctUmbral, type NivelAlerta } from "@/lib/alertas";
 import { calcularTUE, clasificarTUE, calcularMTBF, proyeccionDiasHastaPM } from "@/lib/indicadores";
+import { horasTotalesAhora } from "@/lib/horas";
 
 // Período de TUE: últimos 30 días expresados en horas.
 export const DIAS_PERIODO_TUE = 30;
@@ -12,6 +13,8 @@ export const TIPOS_EQUIPO = ["bomba_infusion", "monitor", "ventilador"] as const
 export type TipoEquipo = (typeof TIPOS_EQUIPO)[number];
 
 export interface EquipoTablero extends Equipo {
+  /** Horas totales al momento de la consulta = horas_acumuladas + tiempo del ciclo abierto si el equipo está en uso. */
+  horasTotales: number;
   nivel: NivelAlerta;
   pct: number;
   enFalla: boolean;
@@ -47,11 +50,13 @@ export interface Tablero {
  */
 export async function construirTablero(): Promise<Tablero> {
   const desde = new Date(Date.now() - HORAS_PERIODO_TUE * 60 * 60 * 1000);
-  const [equipos, fallas, horasUsoPorEquipo] = await Promise.all([
+  const [equipos, fallas, horasUsoPorEquipo, ciclosAbiertos] = await Promise.all([
     listarEquipos(),
     listarFallasDesde(desde),
     sumarHorasPorEquipoDesde(desde),
+    iniciosDeCiclosAbiertos(),
   ]);
+  const ahora = new Date();
 
   const equipoPorId = new Map(equipos.map((e) => [e.id, e]));
 
@@ -70,17 +75,27 @@ export async function construirTablero(): Promise<Tablero> {
     const pctAlertaCfg = Number(eq.pct_alerta);
     const pctVencidoCfg = Number(eq.pct_vencido);
 
-    const nivel = estadoAlerta(horasAcum, umbral, pctAlertaCfg, pctVencidoCfg);
-    const pct = pctUmbral(horasAcum, umbral);
+    // Horas "en vivo": suma el tiempo transcurrido del ciclo abierto si el equipo está en uso.
+    // Sin esto, un equipo que cruza el umbral durante un ciclo largo no dispararía la alerta
+    // hasta que el ciclo se cerrara — momento inadecuado en la práctica clínica.
+    const inicioCicloAbierto = ciclosAbiertos[eq.id] ?? null;
+    const horasTotales = horasTotalesAhora(horasAcum, inicioCicloAbierto, ahora);
+
+    const nivel = estadoAlerta(horasTotales, umbral, pctAlertaCfg, pctVencidoCfg);
+    const pct = pctUmbral(horasTotales, umbral);
     const enFalla = eq.estado === "mantenimiento" || (fallasPorEquipo.get(eq.id) ?? 0) > 0;
 
-    const horasUsoPeriodo = horasUsoPorEquipo[eq.id] ?? 0;
+    // Para TUE incluimos las horas del ciclo abierto además de las cerradas en el período.
+    const horasUsoPeriodo = (horasUsoPorEquipo[eq.id] ?? 0) + (inicioCicloAbierto
+      ? Math.max(0, (ahora.getTime() - inicioCicloAbierto.getTime()) / (1000 * 60 * 60))
+      : 0);
     const tue = calcularTUE(horasUsoPeriodo, HORAS_PERIODO_TUE);
     const horasPorDia = horasUsoPeriodo / DIAS_PERIODO_TUE;
-    const proyeccionDias = proyeccionDiasHastaPM(horasAcum, umbral, pctAlertaCfg, horasPorDia);
+    const proyeccionDias = proyeccionDiasHastaPM(horasTotales, umbral, pctAlertaCfg, horasPorDia);
 
     return {
       ...eq,
+      horasTotales,
       nivel,
       pct,
       enFalla,
@@ -98,11 +113,12 @@ export async function construirTablero(): Promise<Tablero> {
   const resumen = {} as Record<TipoEquipo, ResumenTipo>;
   const mtbfPorTipo = {} as Record<TipoEquipo, number | null>;
   for (const tipo of TIPOS_EQUIPO) {
-    const delTipo = equipos.filter((e) => e.tipo === tipo);
+    const delTipo = equiposConNivel.filter((e) => e.tipo === tipo);
     const r: ResumenTipo = { total: delTipo.length, disponible: 0, en_uso: 0, mantenimiento: 0, horasAcumuladas: 0 };
     for (const e of delTipo) {
       r[e.estado] += 1;
-      r.horasAcumuladas += Number(e.horas_acumuladas);
+      // Sumar horas "en vivo" para que el resumen por tipo también refleje el estado actual.
+      r.horasAcumuladas += e.horasTotales;
     }
     resumen[tipo] = r;
     // MTBF (últimos 30 días): incluye fallas sintéticas cargadas para pruebas — ver informe.

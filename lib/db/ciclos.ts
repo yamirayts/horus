@@ -70,3 +70,21 @@ export async function sumarHorasPorEquipoDesde(desde: Date): Promise<Record<stri
   for (const f of filas) mapa[f.equipo_id] = Number(f.total);
   return mapa;
 }
+
+/**
+ * Inicio del ciclo abierto actual de cada equipo que esté en uso.
+ * Se usa para calcular horas acumuladas "en vivo": las horas_acumuladas del equipo
+ * más el tiempo transcurrido desde el inicio del ciclo abierto.
+ * Sin esto, un equipo que cruza el umbral durante un ciclo largo no dispararía la
+ * alerta hasta que se cerrara ese ciclo, momento inadecuado en la práctica clínica.
+ */
+export async function iniciosDeCiclosAbiertos(): Promise<Record<string, Date>> {
+  const filas = await sql<{ equipo_id: string; inicio: Date }[]>`
+    SELECT DISTINCT ON (equipo_id) equipo_id, inicio
+    FROM ciclos_uso
+    WHERE fin IS NULL
+    ORDER BY equipo_id, inicio DESC`;
+  const mapa: Record<string, Date> = {};
+  for (const f of filas) mapa[f.equipo_id] = new Date(f.inicio);
+  return mapa;
+}

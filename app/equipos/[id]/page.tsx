@@ -6,6 +6,7 @@ import { listarMantenimientos } from "@/lib/db/mantenimientos";
 import { listarFallas } from "@/lib/db/fallas";
 import { listarLecturas } from "@/lib/db/horometro";
 import BarraUmbral from "@/app/components/BarraUmbral";
+import AutoRefresh from "@/app/components/AutoRefresh";
 import EquipoAcciones from "./EquipoAcciones";
 import HorometroLecturas from "./HorometroLecturas";
 import ZonaAccionesCriticas from "./ZonaAccionesCriticas";
@@ -59,6 +60,15 @@ export default async function DetalleEquipoPage({ params }: DetalleEquipoPagePro
   const umbral = Number(equipo.umbral_horas);
   const pctAlerta = Number(equipo.pct_alerta);
   const pctVencido = Number(equipo.pct_vencido);
+  // Ciclo abierto (equipo en uso): sumamos su tiempo transcurrido al total mostrado y a la
+  // barra de umbral, para que las alertas reflejen el estado real y no queden congeladas
+  // hasta que el ciclo se cierre.
+  const cicloAbierto = ciclos.find((c) => c.fin === null) ?? null;
+  const inicioCicloAbierto = cicloAbierto ? new Date(cicloAbierto.inicio) : null;
+  const horasCicloEnCurso = inicioCicloAbierto
+    ? Math.max(0, (Date.now() - inicioCicloAbierto.getTime()) / (1000 * 60 * 60))
+    : 0;
+  const horasTotales = Math.round((horasAcum + horasCicloEnCurso) * 100) / 100;
   const totalActividad =
     ciclos.length + mantenimientos.length + fallas.length + lecturasHorometro.length;
 
@@ -110,19 +120,35 @@ export default async function DetalleEquipoPage({ params }: DetalleEquipoPagePro
         </span>
       </header>
 
+      {/* Auto-refresh solo si el equipo está en uso: mientras corre un ciclo abierto,
+          las horas "en vivo" crecen y las alertas pueden dispararse. Cuando el equipo está
+          disponible, el estado no cambia sin acción del usuario y no hace falta refrescar. */}
+      {inicioCicloAbierto && (
+        <div className="mb-3 print:hidden">
+          <AutoRefresh intervalMs={30_000} />
+        </div>
+      )}
+
       {/* Hero de horas y barra de umbral. Datos importantes destacados. */}
       <section className="mb-5 rounded-lg border border-slate-200 bg-white p-5 shadow-sm print:hidden">
         <div className="mb-4 grid grid-cols-2 gap-4 sm:grid-cols-4">
           <div>
-            <p className="text-xs uppercase tracking-wide text-slate-500">Horas acumuladas</p>
-            <p className="text-2xl font-bold text-slate-900">{horasAcum.toFixed(1)} h</p>
+            <p className="text-xs uppercase tracking-wide text-slate-500">
+              Horas totales {inicioCicloAbierto ? <span className="text-emerald-700">(en vivo)</span> : ""}
+            </p>
+            <p className="text-2xl font-bold text-slate-900">{horasTotales.toFixed(2)} h</p>
+            {inicioCicloAbierto && (
+              <p className="mt-0.5 text-xs text-slate-500">
+                {horasAcum.toFixed(2)} h cerradas + {horasCicloEnCurso.toFixed(2)} h del ciclo en curso
+              </p>
+            )}
           </div>
           <div>
             <p className="text-xs uppercase tracking-wide text-slate-500">Umbral de PM</p>
             <p className="text-2xl font-bold text-slate-900">{umbral} h</p>
           </div>
           <div>
-            <p className="text-xs uppercase tracking-wide text-slate-500">Ciclos reales</p>
+            <p className="text-xs uppercase tracking-wide text-slate-500">Ciclos reales cerrados</p>
             <p className="text-lg font-semibold text-slate-700">{horasReales.toFixed(1)} h</p>
           </div>
           <div>
@@ -130,7 +156,7 @@ export default async function DetalleEquipoPage({ params }: DetalleEquipoPagePro
             <p className="text-lg font-semibold text-slate-700">{equipo.ubicacion ?? "—"}</p>
           </div>
         </div>
-        <BarraUmbral horasAcum={horasAcum} umbral={umbral} pctAlerta={pctAlerta} pctVencido={pctVencido} />
+        <BarraUmbral horasAcum={horasTotales} umbral={umbral} pctAlerta={pctAlerta} pctVencido={pctVencido} />
         {horasIniciales > 0 && (
           <p className="mt-3 text-xs text-slate-500">
             Del total acumulado, {horasIniciales.toFixed(1)} h fueron carga inicial (uso previo).

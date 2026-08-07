@@ -1,5 +1,7 @@
 import Link from "next/link";
 import { listarEquipos } from "@/lib/db/equipos";
+import { iniciosDeCiclosAbiertos } from "@/lib/db/ciclos";
+import { horasTotalesAhora } from "@/lib/horas";
 import TarjetaEquipo from "@/app/components/TarjetaEquipo";
 
 // El estado de los equipos cambia con cada escaneo: nunca cachear esta página.
@@ -37,12 +39,22 @@ export default async function EquiposPage({ searchParams }: EquiposPageProps) {
   const tipo = searchParams.tipo || undefined;
   const estado = searchParams.estado || undefined;
   const baja = searchParams.baja;
-  const equipos = await listarEquipos({
-    tipo,
-    estado,
-    incluirBajas: baja === "incluir",
-    soloBajas: baja === "solo",
-  });
+  const [equipos, ciclosAbiertos] = await Promise.all([
+    listarEquipos({
+      tipo,
+      estado,
+      incluirBajas: baja === "incluir",
+      soloBajas: baja === "solo",
+    }),
+    iniciosDeCiclosAbiertos(),
+  ]);
+  // Horas totales al instante = acumuladas + tiempo del ciclo abierto (si está en uso).
+  // Se calcula acá una sola vez y se pasa a cada tarjeta, para reflejar el estado en vivo.
+  const ahora = new Date();
+  const equiposConHorasEnVivo = equipos.map((eq) => ({
+    ...eq,
+    horasTotales: horasTotalesAhora(Number(eq.horas_acumuladas), ciclosAbiertos[eq.id] ?? null, ahora),
+  }));
 
   return (
     <main className="mx-auto max-w-5xl p-4">
@@ -105,8 +117,8 @@ export default async function EquiposPage({ searchParams }: EquiposPageProps) {
         <p className="text-sm text-gray-500">No hay equipos que coincidan con el filtro.</p>
       ) : (
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {equipos.map((eq) => (
-            <TarjetaEquipo key={eq.id} equipo={eq} />
+          {equiposConHorasEnVivo.map((eq) => (
+            <TarjetaEquipo key={eq.id} equipo={eq} horasTotales={eq.horasTotales} />
           ))}
         </div>
       )}
