@@ -10,6 +10,14 @@ const ELEMENT_ID = "lector-qr";
 const VENTANA_ANTIDOBLE_MS = 3000; // mismo id leído antes de este tiempo se ignora
 const REINTENTO_MS = 1500; // demora antes del reintento por falla de red
 const CONFIRMACION_MS = 1500; // tiempo que se muestra la confirmación/error antes de reanudar
+// El mismo QR debe leerse de forma sostenida por este tiempo antes de disparar.
+// Sin esto, barrer la cámara sobre varios QR pegados en el panel dispara el equipo
+// equivocado con el primer frame decodificado. 800 ms fuerza a apuntar y sostener.
+const CONFIRMACION_LECTURA_MS = 800;
+// Si pasan más de este gap sin volver a decodificar el mismo id, se descarta la
+// lectura acumulada. Cubre el caso "apunté al QR correcto un rato corto, moví la
+// cámara, volví" — sin esto, la lectura acumulada seguiría contando y dispararía.
+const GAP_MAX_LECTURA_MS = 400;
 
 interface RespuestaConsulta {
   ok: boolean;
@@ -122,6 +130,11 @@ export default function EscanerQR() {
   const pendientesRef = useRef<EscaneoPendiente[]>([]);
   const pendientesFallaRef = useRef<FallaPendiente[]>([]);
   const procesandoRef = useRef(false);
+  // Candidato en confirmación: el QR se debe ver sostenido hasta que
+  // (ahora - primeraLecturaTs) >= CONFIRMACION_LECTURA_MS para disparar.
+  const candidatoRef = useRef<{ id: string; primeraLecturaTs: number; ultimaLecturaTs: number } | null>(null);
+  // Copia del candidato para pintar el progreso; en estado (no ref) para que React re-renderice.
+  const [candidatoUI, setCandidatoUI] = useState<{ id: string; progreso: number } | null>(null);
 
   // Hora local HH:MM para el mensaje de confirmación.
   function horaActual(): string {
@@ -132,6 +145,8 @@ export default function EscanerQR() {
   // Vuelve al estado de escaneo y reanuda la decodificación de la cámara.
   function reanudar() {
     procesandoRef.current = false;
+    candidatoRef.current = null;
+    setCandidatoUI(null);
     setEstado({ tipo: "escaneando" });
     scannerRef.current?.resume();
   }
@@ -357,6 +372,28 @@ export default function EscanerQR() {
     if (ultimo && ultimo.id === id && ahora - ultimo.ts < VENTANA_ANTIDOBLE_MS) {
       return;
     }
+
+    const candidato = candidatoRef.current;
+    // Si es un id distinto al candidato actual, o pasó demasiado tiempo desde
+    // la última lectura (barrido rápido / se movió la cámara y volvió), reiniciamos
+    // el conteo desde este frame.
+    if (!candidato || candidato.id !== id || ahora - candidato.ultimaLecturaTs > GAP_MAX_LECTURA_MS) {
+      candidatoRef.current = { id, primeraLecturaTs: ahora, ultimaLecturaTs: ahora };
+      setCandidatoUI({ id, progreso: 0 });
+      return;
+    }
+
+    // Mismo id, lectura sostenida: actualizar timestamp y calcular progreso.
+    candidato.ultimaLecturaTs = ahora;
+    const transcurrido = ahora - candidato.primeraLecturaTs;
+    if (transcurrido < CONFIRMACION_LECTURA_MS) {
+      setCandidatoUI({ id, progreso: Math.min(1, transcurrido / CONFIRMACION_LECTURA_MS) });
+      return;
+    }
+
+    // Confirmado: mantuvo la cámara sobre el mismo QR el tiempo suficiente.
+    candidatoRef.current = null;
+    setCandidatoUI(null);
     ultimoRef.current = { id, ts: ahora };
     procesandoRef.current = true;
     setEstado({ tipo: "consultando" });
@@ -437,6 +474,23 @@ export default function EscanerQR() {
         {estado.tipo === "consultando" && (
           <div className="absolute inset-0 flex items-center justify-center bg-black/70 p-6 text-center text-2xl font-bold">
             Consultando…
+          </div>
+        )}
+
+        {/* Feedback de lectura sostenida: se muestra solo mientras el escáner está en
+            estado "escaneando" y hay un QR en confirmación. Le pide a la usuaria que
+            mantenga la cámara quieta y le muestra cuánto falta antes de disparar. */}
+        {estado.tipo === "escaneando" && candidatoUI && (
+          <div className="pointer-events-none absolute inset-x-0 top-6 flex flex-col items-center gap-2 px-6">
+            <div className="rounded-full bg-black/70 px-4 py-2 text-center text-sm font-semibold text-white">
+              Leyendo {candidatoUI.id} — mantené la cámara
+            </div>
+            <div className="h-2 w-48 overflow-hidden rounded-full bg-white/20">
+              <div
+                className="h-full rounded-full bg-emerald-400 transition-[width] duration-100 ease-linear"
+                style={{ width: `${candidatoUI.progreso * 100}%` }}
+              />
+            </div>
           </div>
         )}
 
