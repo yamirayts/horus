@@ -79,7 +79,9 @@ function ScanContent() {
         } else {
           setEquipo(data.equipo);
           setAccion(data.accion);
-          setUbicacion(data.equipo.ubicacion ?? "");
+          // No autocompletar la cama con el historial: al activar, el usuario
+          // debe elegir la cama actual explícitamente para evitar registrar
+          // una asignación equivocada por herencia del ciclo previo.
         }
         setCargando(false);
       })
@@ -231,12 +233,9 @@ function ScanContent() {
                 hasta que se registre la intervención.
               </p>
             </div>
-            <div className="mt-5 flex justify-center gap-3">
-              <Link href="/" className="rounded bg-red-700 px-5 py-3 text-sm font-semibold text-white">
-                Entendido
-              </Link>
-              <Link href={`/equipos/${id}`} className="rounded border border-red-400 px-5 py-3 text-sm">
-                Ver detalle
+            <div className="mt-5 flex justify-center">
+              <Link href="/escanear" className="rounded bg-red-700 px-5 py-3 text-sm font-semibold text-white">
+                Entendido, escanear otro
               </Link>
             </div>
           </div>
@@ -257,14 +256,9 @@ function ScanContent() {
         <div className={`${bg} rounded-lg px-8 py-10 text-center text-2xl font-bold text-white`}>
           {confirmando.mensaje}
         </div>
-        <div className="flex gap-3">
-          <Link href="/" className="rounded bg-gray-900 px-5 py-3 text-sm text-white">
-            Escanear otro
-          </Link>
-          <Link href={`/equipos/${id}`} className="rounded border border-gray-400 px-5 py-3 text-sm">
-            Ver detalle
-          </Link>
-        </div>
+        <Link href="/escanear" className="rounded bg-gray-900 px-5 py-3 text-sm text-white">
+          Escanear otro
+        </Link>
       </main>
     );
   }
@@ -295,7 +289,7 @@ function ScanContent() {
         <div className="mt-6">
           <p className="text-sm text-gray-500">Estado actual</p>
           <p className="text-lg font-semibold">{ETIQUETA_ESTADO[equipo.estado]}</p>
-          {equipo.ubicacion && (
+          {equipo.estado === "en_uso" && equipo.ubicacion && (
             <p className="text-sm text-gray-600">Ubicación: {equipo.ubicacion}</p>
           )}
         </div>

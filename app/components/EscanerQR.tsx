@@ -107,8 +107,9 @@ export default function EscanerQR() {
   // Mini-formulario de reporte de falla: solo se abre con un equipo ya identificado (tarjeta abierta).
   const [modalFalla, setModalFalla] = useState<{ equipoId: string } | null>(null);
 
-  // Cama / ubicación que se envía al activar. Se rellena con la ubicación previa
-  // del equipo cuando aparece la tarjeta, y el enfermero puede editarla.
+  // Cama / ubicación que se envía al activar. Siempre arranca vacía: no autocompletar
+  // con la ubicación del último ciclo para evitar registrar por herencia una asignación
+  // equivocada (el equipo puede ir a otra cama distinta a la de su último uso).
   const [ubicacionActivar, setUbicacionActivar] = useState("");
   const [tipoFalla, setTipoFalla] = useState(TIPOS_FALLA[0].value);
   const [descripcionFalla, setDescripcionFalla] = useState("");
@@ -236,8 +237,9 @@ export default function EscanerQR() {
         setEstado({ tipo: "tarjeta_error", mensaje: data.error ?? "equipo desconocido" });
         return;
       }
-      // Precargar la ubicación previa del equipo para editarla al activar.
-      setUbicacionActivar(data.equipo.ubicacion ?? "");
+      // Al activar (equipo disponible), la cama se elige explícitamente cada vez —
+      // no heredar la del ciclo previo. Al desactivar sí se muestra la actual como referencia.
+      setUbicacionActivar(data.equipo.estado === "en_uso" ? data.equipo.ubicacion ?? "" : "");
       setEstado({ tipo: "tarjeta", id, equipo: data.equipo, accion: data.accion });
     } catch {
       setEstado({ tipo: "tarjeta_error", mensaje: "no se pudo consultar el equipo" });
