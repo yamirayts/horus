@@ -6,4 +6,7 @@ node_modules/
 *.log
 next-env.d.ts
 *.tsbuildinfo
-tfi/
+# Carpeta del TFI: se ignora todo salvo las planillas de datos (para poder linkearlas en GitHub)
+tfi/*
+!tfi/duracion_escaneo.xlsx
+!tfi/planilla_registro.xlsx
