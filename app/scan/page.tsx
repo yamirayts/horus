@@ -2,10 +2,18 @@
 
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { Suspense, useEffect, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 import type { Equipo } from "@/lib/db/equipos";
 import type { Accion } from "@/lib/alertas";
 import { ESCENARIO } from "@/lib/escenario";
+import { encolar, quitar, iniciarReintentos } from "@/lib/colaEscaneos";
+
+// Reintento del envío mientras la pantalla /scan está abierta: cada REINTENTO_MS
+// intentamos el POST; cuando entra el resultado, mostramos la confirmación en vivo.
+// Si la usuaria se va antes de que vuelva la red, el drainer global en localStorage
+// termina el trabajo. Combinar ambos permite "confirmación visible cuando se puede,
+// no perder registros nunca".
+const REINTENTO_MS = 2500;
 
 interface RespuestaConsulta {
   ok: boolean;
@@ -48,9 +56,18 @@ function ScanContent() {
   const [accion, setAccion] = useState<Accion | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [confirmando, setConfirmando] = useState<
-    { variante: "activar" | "desactivar" | "error" | "falla" | "retiro"; mensaje: string; horas?: number; umbral?: number } | null
+    { variante: "activar" | "desactivar" | "error" | "falla" | "retiro" | "encolado"; mensaje: string; horas?: number; umbral?: number } | null
   >(null);
   const [enviando, setEnviando] = useState(false);
+
+  // Handle del interval de reintento en vivo: cancelamos al desmontar o al confirmar éxito.
+  const reintentoRef = useRef<number | null>(null);
+  const cancelarReintentoEnVivo = () => {
+    if (reintentoRef.current != null) {
+      window.clearInterval(reintentoRef.current);
+      reintentoRef.current = null;
+    }
+  };
 
   // Cama / ubicación (solo se envía al activar).
   const [ubicacion, setUbicacion] = useState("");
@@ -62,6 +79,17 @@ function ScanContent() {
   const [ponerEnMantenimiento, setPonerEnMantenimiento] = useState(true);
   const [enviandoFalla, setEnviandoFalla] = useState(false);
   const [errorFalla, setErrorFalla] = useState<string | null>(null);
+
+  // Al montar arrancamos el drainer global de la cola (por si quedaron escaneos
+  // pendientes de otra sesión) y lo apagamos al desmontar. También cancelamos
+  // cualquier reintento en vivo activo para evitar leaks.
+  useEffect(() => {
+    const cleanupDrainer = iniciarReintentos();
+    return () => {
+      cleanupDrainer();
+      cancelarReintentoEnVivo();
+    };
+  }, []);
 
   useEffect(() => {
     if (!id) {
@@ -95,49 +123,74 @@ function ScanContent() {
     };
   }, [id]);
 
+  // Traduce la RespuestaScan del backend al `confirmando` que ve la usuaria.
+  // Separado del envío para reusarlo en el primer intento y en cada reintento en vivo.
+  function mostrarResultado(data: RespuestaScan) {
+    if (!data.ok || !data.accion || data.accion === "bloqueado") {
+      setConfirmando({ variante: "error", mensaje: `⚠ ${data.error ?? "No se pudo procesar."}` });
+      return;
+    }
+    const hora = new Date();
+    const hh = `${String(hora.getHours()).padStart(2, "0")}:${String(hora.getMinutes()).padStart(2, "0")}`;
+    if (data.accion === "desactivar" && data.requiereRetiro) {
+      setConfirmando({
+        variante: "retiro",
+        mensaje: `⚠ ${id} SUPERÓ EL UMBRAL — Apartar para retiro`,
+        horas: data.horasAcumuladas,
+        umbral: data.umbral,
+      });
+    } else {
+      setConfirmando({
+        variante: data.accion,
+        mensaje:
+          data.accion === "activar"
+            ? `✓ ${id} ACTIVADO — ${hh}`
+            : `✓ ${id} DESACTIVADO — ${hh}`,
+      });
+    }
+  }
+
   async function confirmar() {
     if (!accion || accion === "bloqueado") return;
     setEnviando(true);
+    const body: { id: string; ubicacion?: string } = { id };
+    if (accion === "activar" && ubicacion.trim()) {
+      body.ubicacion = ubicacion.trim();
+    }
     try {
-      const body: { id: string; ubicacion?: string } = { id };
-      // Enviar ubicación solo al activar; al desactivar no tiene sentido.
-      if (accion === "activar" && ubicacion.trim()) {
-        body.ubicacion = ubicacion.trim();
-      }
       const res = await fetch("/api/scan", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
       });
       const data: RespuestaScan = await res.json();
-      if (!data.ok || !data.accion || data.accion === "bloqueado") {
-        setConfirmando({
-          variante: "error",
-          mensaje: `⚠ ${data.error ?? "No se pudo procesar."}`,
-        });
-      } else {
-        const hora = new Date();
-        const hh = `${String(hora.getHours()).padStart(2, "0")}:${String(hora.getMinutes()).padStart(2, "0")}`;
-        // Si al desactivar el equipo superó el umbral, priorizar el mensaje de retiro.
-        if (data.accion === "desactivar" && data.requiereRetiro) {
-          setConfirmando({
-            variante: "retiro",
-            mensaje: `⚠ ${id} SUPERÓ EL UMBRAL — Apartar para retiro`,
-            horas: data.horasAcumuladas,
-            umbral: data.umbral,
-          });
-        } else {
-          setConfirmando({
-            variante: data.accion,
-            mensaje:
-              data.accion === "activar"
-                ? `✓ ${id} ACTIVADO — ${hh}`
-                : `✓ ${id} DESACTIVADO — ${hh}`,
-          });
-        }
-      }
+      mostrarResultado(data);
     } catch {
-      setConfirmando({ variante: "error", mensaje: "⚠ Sin conexión. Intentá de nuevo." });
+      // Falla de red: encolar el escaneo (no se pierde) y arrancar reintento en vivo
+      // que va actualizando la UI cada REINTENTO_MS hasta que el POST entre.
+      encolar(body.id, body.ubicacion);
+      setConfirmando({
+        variante: "encolado",
+        mensaje: "Sin conexión — el escaneo quedó en cola y se reintenta automáticamente…",
+      });
+      cancelarReintentoEnVivo();
+      reintentoRef.current = window.setInterval(async () => {
+        if (!navigator.onLine) return;
+        try {
+          const res = await fetch("/api/scan", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(body),
+          });
+          const data: RespuestaScan = await res.json();
+          // Si volvió respuesta (aunque sea de error de aplicación), ya no hace falta reintentar.
+          cancelarReintentoEnVivo();
+          quitar(body.id);
+          mostrarResultado(data);
+        } catch {
+          // Sigue sin red: dejar que el interval siga.
+        }
+      }, REINTENTO_MS);
     } finally {
       setEnviando(false);
     }
@@ -250,12 +303,29 @@ function ScanContent() {
         ? "bg-orange-600"
         : confirmando.variante === "falla"
         ? "bg-red-700"
+        : confirmando.variante === "encolado"
+        ? "bg-amber-600"
         : "bg-red-600";
+    const esEncolado = confirmando.variante === "encolado";
     return (
       <main className="min-h-[calc(100vh-3.5rem)] flex flex-col items-center justify-center gap-6 p-6">
-        <div className={`${bg} rounded-lg px-8 py-10 text-center text-2xl font-bold text-white`}>
-          {confirmando.mensaje}
+        <div className={`${bg} flex items-center gap-4 rounded-lg px-8 py-10 text-center text-2xl font-bold text-white`}>
+          {esEncolado && (
+            // Spinner que indica que el reintento está activo. Si la usuaria se queda
+            // en la pantalla ve la confirmación pasar a verde en cuanto vuelva la red;
+            // si se va, la cola en localStorage termina el envío en segundo plano.
+            <svg className="h-8 w-8 shrink-0 animate-spin" viewBox="0 0 24 24" fill="none" aria-hidden>
+              <circle className="opacity-30" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+              <path className="opacity-90" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
+            </svg>
+          )}
+          <span>{confirmando.mensaje}</span>
         </div>
+        {esEncolado && (
+          <p className="max-w-md text-center text-sm text-gray-600">
+            Podés seguir escaneando otros equipos: este quedó en cola y se enviará solo cuando vuelva la señal.
+          </p>
+        )}
         <Link href="/escanear" className="rounded bg-gray-900 px-5 py-3 text-sm text-white">
           Escanear otro
         </Link>
