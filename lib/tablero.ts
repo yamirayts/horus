@@ -39,6 +39,8 @@ export interface Tablero {
   alertas: EquipoTablero[];
   vencidos: EquipoTablero[];
   enFalla: EquipoTablero[];
+  /** Equipos que superaron el umbral y quedaron apartados en 'mantenimiento'. Requieren retiro para intervención. */
+  paraRetirar: EquipoTablero[];
   equipos: EquipoTablero[];
   mtbfPorTipo: Record<TipoEquipo, number | null>;
 }
@@ -109,6 +111,12 @@ export async function construirTablero(): Promise<Tablero> {
   const alertas = equiposConNivel.filter((e) => e.nivel === "aviso");
   const vencidos = equiposConNivel.filter((e) => e.nivel === "vencido");
   const enFalla = equiposConNivel.filter((e) => e.enFalla);
+  // "Para retirar": equipos que superaron el umbral y quedaron en 'mantenimiento'.
+  // Se distinguen de los "en falla" comunes porque el motivo del apartado es el vencimiento,
+  // no un reporte de falla del personal. Ingeniería Clínica los prioriza para intervención.
+  const paraRetirar = equiposConNivel.filter(
+    (e) => e.estado === "mantenimiento" && e.nivel === "vencido",
+  );
 
   const resumen = {} as Record<TipoEquipo, ResumenTipo>;
   const mtbfPorTipo = {} as Record<TipoEquipo, number | null>;
@@ -125,5 +133,5 @@ export async function construirTablero(): Promise<Tablero> {
     mtbfPorTipo[tipo] = calcularMTBF(r.horasAcumuladas, fallasPorTipo.get(tipo) ?? 0);
   }
 
-  return { resumen, alertas, vencidos, enFalla, equipos: equiposConNivel, mtbfPorTipo };
+  return { resumen, alertas, vencidos, enFalla, paraRetirar, equipos: equiposConNivel, mtbfPorTipo };
 }

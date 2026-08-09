@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { sql } from "@/lib/db/client";
 import { getEquipo } from "@/lib/db/equipos";
 import { abrirCiclo, cerrarCicloAbierto } from "@/lib/db/ciclos";
 import { decidirAccion } from "@/lib/alertas";
@@ -48,7 +49,30 @@ export async function POST(req: NextRequest) {
     }
     if (accion === "desactivar") {
       const horas = await cerrarCicloAbierto(id);
-      return NextResponse.json({ ok: true, accion, horas, equipo: { ...equipo, estado: "disponible" } });
+      // Al cerrar, chequear si el equipo superó el umbral de vencido.
+      // Si sí, apartarlo automáticamente: pasa a estado 'mantenimiento' para que salga
+      // del pool y no se pueda reasignar hasta que Ingeniería Clínica lo intervenga.
+      const eqActualizado = await getEquipo(id);
+      const horasAcum = Number(eqActualizado?.horas_acumuladas ?? 0);
+      const umbral = Number(eqActualizado?.umbral_horas ?? 0);
+      const pctVencido = Number(eqActualizado?.pct_vencido ?? 1);
+      const requiereRetiro = umbral > 0 && horasAcum >= umbral * pctVencido;
+      if (requiereRetiro) {
+        await sql`UPDATE equipos SET estado = 'mantenimiento' WHERE id = ${id}`;
+      }
+      return NextResponse.json({
+        ok: true,
+        accion,
+        horas,
+        requiereRetiro,
+        horasAcumuladas: horasAcum,
+        umbral,
+        equipo: {
+          ...equipo,
+          estado: requiereRetiro ? "mantenimiento" : "disponible",
+          horas_acumuladas: horasAcum,
+        },
+      });
     }
     return NextResponse.json({ ok: false, error: "equipo en mantenimiento" }, { status: 409 });
   } catch (e) {

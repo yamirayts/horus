@@ -37,7 +37,7 @@ const COLOR_TUE: Record<string, string> = {
  * (TUE, MTBF, proyección de PM).
  */
 export default async function TableroPage() {
-  const { resumen, alertas, vencidos, enFalla, equipos, mtbfPorTipo } = await construirTablero();
+  const { resumen, alertas, vencidos, enFalla, paraRetirar, equipos, mtbfPorTipo } = await construirTablero();
 
   const maxHoras = Math.max(1, ...TIPOS_EQUIPO.map((t) => resumen[t].horasAcumuladas));
   const conProyeccion = equipos.filter(
@@ -62,6 +62,52 @@ export default async function TableroPage() {
           Ver listado completo →
         </Link>
       </div>
+
+      {/* Banner de equipos apartados por vencimiento: se muestra solo cuando hay alguno,
+          con el máximo protagonismo visual porque exige acción inmediata de Ingeniería Clínica. */}
+      {paraRetirar.length > 0 && (
+        <section className="mb-6 rounded-xl border-4 border-red-600 bg-red-50 p-5 shadow-md">
+          <div className="flex flex-wrap items-start gap-4">
+            <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-red-700 text-white">
+              <svg className="h-8 w-8" viewBox="0 0 20 20" fill="currentColor" aria-hidden>
+                <path
+                  fillRule="evenodd"
+                  d="M8.485 3.495a1.75 1.75 0 013.03 0l6.28 10.875A1.75 1.75 0 0116.28 17H3.72a1.75 1.75 0 01-1.515-2.63l6.28-10.875zM10 6.5a.75.75 0 00-.75.75v3.5a.75.75 0 001.5 0v-3.5A.75.75 0 0010 6.5zm0 6.75a1 1 0 100 2 1 1 0 000-2z"
+                  clipRule="evenodd"
+                />
+              </svg>
+            </div>
+            <div className="flex-1">
+              <p className="text-xs font-semibold uppercase tracking-wide text-red-800">
+                Acción requerida — Ingeniería Clínica
+              </p>
+              <h2 className="mt-1 text-xl font-extrabold text-red-900">
+                {paraRetirar.length} {paraRetirar.length === 1 ? "equipo" : "equipos"} para retirar por vencimiento
+              </h2>
+              <p className="mt-1 text-sm text-red-900">
+                Estos equipos superaron el umbral de mantenimiento en su último ciclo de uso y quedaron
+                apartados en estado &quot;en mantenimiento&quot; para su intervención. Registrar el
+                mantenimiento desde el detalle del equipo restablece el contador y lo devuelve a servicio.
+              </p>
+              <ul className="mt-3 flex flex-wrap gap-2">
+                {paraRetirar.map((eq) => (
+                  <li key={eq.id}>
+                    <Link
+                      href={`/equipos/${encodeURIComponent(eq.id)}`}
+                      className="inline-flex items-center gap-1 rounded-lg border-2 border-red-400 bg-white px-3 py-1.5 font-mono text-sm font-bold text-red-900 hover:bg-red-100"
+                    >
+                      {eq.id}
+                      <span className="text-xs font-normal text-red-700">
+                        · {eq.horasTotales.toFixed(0)} h / {eq.umbral_horas} h
+                      </span>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </div>
+        </section>
+      )}
 
       {/* 1. Panel de alertas: KPI cards destacadas con colores fuertes. */}
       <section className="mb-6 grid grid-cols-1 gap-3 sm:grid-cols-3">

@@ -22,6 +22,9 @@ interface RespuestaScan {
   ok: boolean;
   accion?: "activar" | "desactivar" | "bloqueado";
   horas?: number;
+  requiereRetiro?: boolean;
+  horasAcumuladas?: number;
+  umbral?: number;
   error?: string;
 }
 
@@ -33,6 +36,7 @@ type EstadoPantalla =
   | { tipo: "tarjeta_error"; mensaje: string }
   | { tipo: "enviando" }
   | { tipo: "confirmando"; mensaje: string; variante: "activar" | "desactivar" | "error" | "falla" }
+  | { tipo: "retiro"; id: string; horasAcumuladas?: number; umbral?: number }
   | { tipo: "sin_conexion"; mensaje: string };
 
 interface EscaneoPendiente {
@@ -155,6 +159,17 @@ export default function EscanerQR() {
         return;
       }
 
+      // Si al desactivar el equipo superó el umbral, mostrar cartel prominente que NO se
+      // auto-oculta: exige acción física del personal (apartar el equipo).
+      if (data.accion === "desactivar" && data.requiereRetiro) {
+        setEstado({
+          tipo: "retiro",
+          id,
+          horasAcumuladas: data.horasAcumuladas,
+          umbral: data.umbral,
+        });
+        return;
+      }
       const etiqueta = data.accion === "activar" ? "ACTIVADO" : "DESACTIVADO";
       setEstado({
         tipo: "confirmando",
@@ -533,6 +548,46 @@ export default function EscanerQR() {
         {estado.tipo === "sin_conexion" && (
           <div className="absolute inset-0 flex items-center justify-center bg-amber-700/95 p-6 text-center text-2xl font-bold">
             {estado.mensaje}
+          </div>
+        )}
+
+        {estado.tipo === "retiro" && (
+          <div className="absolute inset-0 flex items-center justify-center overflow-y-auto bg-red-900/95 p-4">
+            <div className="w-full max-w-md rounded-xl border-4 border-red-300 bg-red-50 p-6 text-center text-red-900 shadow-2xl">
+              <div className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-full bg-red-700 text-white">
+                <svg className="h-9 w-9" viewBox="0 0 20 20" fill="currentColor" aria-hidden>
+                  <path
+                    fillRule="evenodd"
+                    d="M8.485 3.495a1.75 1.75 0 013.03 0l6.28 10.875A1.75 1.75 0 0116.28 17H3.72a1.75 1.75 0 01-1.515-2.63l6.28-10.875zM10 6.5a.75.75 0 00-.75.75v3.5a.75.75 0 001.5 0v-3.5A.75.75 0 0010 6.5zm0 6.75a1 1 0 100 2 1 1 0 000-2z"
+                    clipRule="evenodd"
+                  />
+                </svg>
+              </div>
+              <p className="text-xs font-semibold uppercase tracking-wide">Equipo vencido</p>
+              <h2 className="mt-1 text-xl font-extrabold">
+                {estado.id} superó el umbral
+              </h2>
+              {estado.horasAcumuladas != null && estado.umbral != null && (
+                <p className="mt-2 text-sm">
+                  {estado.horasAcumuladas.toFixed(1)} h · umbral {estado.umbral} h
+                </p>
+              )}
+              <div className="mt-4 rounded-lg bg-red-100 p-3 text-left text-sm">
+                <p className="font-bold">Acción requerida:</p>
+                <ul className="mt-1 list-disc pl-5">
+                  <li>Retirar el equipo del uso clínico.</li>
+                  <li>Apartarlo físicamente para mantenimiento.</li>
+                  <li>Avisar al Servicio de Ingeniería Clínica.</li>
+                </ul>
+              </div>
+              <button
+                type="button"
+                onClick={reanudar}
+                className="mt-4 w-full rounded bg-red-700 py-2 font-semibold text-white hover:bg-red-800"
+              >
+                Entendido, seguir escaneando
+              </button>
+            </div>
           </div>
         )}
       </div>
