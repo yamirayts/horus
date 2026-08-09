@@ -6,7 +6,7 @@ import { Suspense, useEffect, useRef, useState } from "react";
 import type { Equipo } from "@/lib/db/equipos";
 import type { Accion } from "@/lib/alertas";
 import { ESCENARIO } from "@/lib/escenario";
-import { encolar, quitar, iniciarReintentos } from "@/lib/colaEscaneos";
+import { encolar, iniciarReintentos } from "@/lib/colaEscaneos";
 
 // Reintento del envío mientras la pantalla /scan está abierta: cada REINTENTO_MS
 // intentamos el POST; cuando entra el resultado, mostramos la confirmación en vivo.
@@ -62,6 +62,10 @@ function ScanContent() {
 
   // Handle del interval de reintento en vivo: cancelamos al desmontar o al confirmar éxito.
   const reintentoRef = useRef<number | null>(null);
+  // Escaneo que está esperando reintento en vivo. Si la usuaria navega antes de que
+  // el POST entre, lo pasamos a localStorage en el cleanup para que el drainer lo termine.
+  // Se maneja con ref (no con estado) para que el cleanup lea siempre el valor actual.
+  const pendienteRef = useRef<{ id: string; ubicacion?: string } | null>(null);
   const cancelarReintentoEnVivo = () => {
     if (reintentoRef.current != null) {
       window.clearInterval(reintentoRef.current);
@@ -81,13 +85,19 @@ function ScanContent() {
   const [errorFalla, setErrorFalla] = useState<string | null>(null);
 
   // Al montar arrancamos el drainer global de la cola (por si quedaron escaneos
-  // pendientes de otra sesión) y lo apagamos al desmontar. También cancelamos
-  // cualquier reintento en vivo activo para evitar leaks.
+  // pendientes de otra sesión) y lo apagamos al desmontar. Si al desmontar hay
+  // un escaneo aún esperando reintento en vivo, lo pasamos a la cola persistente
+  // para que el drainer lo termine — sin esto se perdería al navegar.
   useEffect(() => {
     const cleanupDrainer = iniciarReintentos();
     return () => {
       cleanupDrainer();
       cancelarReintentoEnVivo();
+      const pendiente = pendienteRef.current;
+      if (pendiente) {
+        encolar(pendiente.id, pendiente.ubicacion);
+        pendienteRef.current = null;
+      }
     };
   }, []);
 
@@ -166,12 +176,15 @@ function ScanContent() {
       const data: RespuestaScan = await res.json();
       mostrarResultado(data);
     } catch {
-      // Falla de red: encolar el escaneo (no se pierde) y arrancar reintento en vivo
-      // que va actualizando la UI cada REINTENTO_MS hasta que el POST entre.
-      encolar(body.id, body.ubicacion);
+      // Falla de red: NO encolamos todavía en localStorage — el drainer de la cola
+      // correría en paralelo al reintento en vivo y produciría un doble toggle al
+      // volver la señal (uno activa, el otro desactiva). Mientras la pantalla esté
+      // abierta el reintento en vivo es el único responsable; el cleanup del efecto
+      // pasa el pendiente a la cola persistente solo si la usuaria se va antes.
+      pendienteRef.current = { id: body.id, ubicacion: body.ubicacion };
       setConfirmando({
         variante: "encolado",
-        mensaje: "Sin conexión — el escaneo quedó en cola y se reintenta automáticamente…",
+        mensaje: "Sin conexión — se reintenta automáticamente…",
       });
       cancelarReintentoEnVivo();
       reintentoRef.current = window.setInterval(async () => {
@@ -185,7 +198,7 @@ function ScanContent() {
           const data: RespuestaScan = await res.json();
           // Si volvió respuesta (aunque sea de error de aplicación), ya no hace falta reintentar.
           cancelarReintentoEnVivo();
-          quitar(body.id);
+          pendienteRef.current = null;
           mostrarResultado(data);
         } catch {
           // Sigue sin red: dejar que el interval siga.
