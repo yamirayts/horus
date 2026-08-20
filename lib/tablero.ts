@@ -17,7 +17,8 @@ export interface EquipoTablero extends Equipo {
   horasTotales: number;
   nivel: NivelAlerta;
   pct: number;
-  enFalla: boolean;
+  /** Cantidad de fallas registradas en la ventana de 30 días (incluye sintéticas del MTBF). */
+  fallasRecientes: number;
   indicadores: {
     tue: number;
     tueClase: "sobreexigido" | "normal" | "subutilizado";
@@ -38,7 +39,10 @@ export interface Tablero {
   resumen: Record<TipoEquipo, ResumenTipo>;
   alertas: EquipoTablero[];
   vencidos: EquipoTablero[];
-  enFalla: EquipoTablero[];
+  /** Equipos en estado 'mantenimiento': fuera de servicio operativo. */
+  enMantenimiento: EquipoTablero[];
+  /** Equipos con al menos una falla en los últimos 30 días (incluye sintéticas del MTBF), sin importar su estado. */
+  conFallas: EquipoTablero[];
   /** Equipos que superaron el umbral y quedaron apartados en 'mantenimiento'. Requieren retiro para intervención. */
   paraRetirar: EquipoTablero[];
   equipos: EquipoTablero[];
@@ -85,7 +89,7 @@ export async function construirTablero(): Promise<Tablero> {
 
     const nivel = estadoAlerta(horasTotales, umbral, pctAlertaCfg, pctVencidoCfg);
     const pct = pctUmbral(horasTotales, umbral);
-    const enFalla = eq.estado === "mantenimiento" || (fallasPorEquipo.get(eq.id) ?? 0) > 0;
+    const fallasRecientes = fallasPorEquipo.get(eq.id) ?? 0;
 
     // Para TUE incluimos las horas del ciclo abierto además de las cerradas en el período.
     const horasUsoPeriodo = (horasUsoPorEquipo[eq.id] ?? 0) + (inicioCicloAbierto
@@ -100,7 +104,7 @@ export async function construirTablero(): Promise<Tablero> {
       horasTotales,
       nivel,
       pct,
-      enFalla,
+      fallasRecientes,
       indicadores: { tue, tueClase: clasificarTUE(tue), horasUsoPeriodo, proyeccionDias },
     };
   });
@@ -110,7 +114,12 @@ export async function construirTablero(): Promise<Tablero> {
 
   const alertas = equiposConNivel.filter((e) => e.nivel === "aviso");
   const vencidos = equiposConNivel.filter((e) => e.nivel === "vencido");
-  const enFalla = equiposConNivel.filter((e) => e.enFalla);
+  // Dos poblaciones distintas, antes mezcladas en una sola tarjeta "en falla o mantenimiento":
+  // "en mantenimiento" es un estado (fuera de servicio); "con fallas" es tener un reporte
+  // reciente (incluidas las sintéticas del MTBF) sin importar el estado. Un equipo puede
+  // estar en ambos, en uno o en ninguno.
+  const enMantenimiento = equiposConNivel.filter((e) => e.estado === "mantenimiento");
+  const conFallas = equiposConNivel.filter((e) => e.fallasRecientes > 0);
   // "Para retirar": equipos que superaron el umbral y quedaron en 'mantenimiento'.
   // Se distinguen de los "en falla" comunes porque el motivo del apartado es el vencimiento,
   // no un reporte de falla del personal. Ingeniería Clínica los prioriza para intervención.
@@ -133,5 +142,5 @@ export async function construirTablero(): Promise<Tablero> {
     mtbfPorTipo[tipo] = calcularMTBF(r.horasAcumuladas, fallasPorTipo.get(tipo) ?? 0);
   }
 
-  return { resumen, alertas, vencidos, enFalla, paraRetirar, equipos: equiposConNivel, mtbfPorTipo };
+  return { resumen, alertas, vencidos, enMantenimiento, conFallas, paraRetirar, equipos: equiposConNivel, mtbfPorTipo };
 }

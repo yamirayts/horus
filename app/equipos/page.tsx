@@ -1,7 +1,9 @@
 import Link from "next/link";
 import { listarEquipos } from "@/lib/db/equipos";
+import { listarFallasDesde } from "@/lib/db/fallas";
 import { iniciosDeCiclosAbiertos } from "@/lib/db/ciclos";
 import { horasTotalesAhora } from "@/lib/horas";
+import { HORAS_PERIODO_TUE } from "@/lib/tablero";
 import TarjetaEquipo from "@/app/components/TarjetaEquipo";
 
 // El estado de los equipos cambia con cada escaneo: nunca cachear esta página.
@@ -27,8 +29,13 @@ const BAJA_OPCIONES = [
   { value: "solo", label: "Solo dados de baja" },
 ];
 
+const FALLAS_OPCIONES = [
+  { value: "", label: "Fallas: todas" },
+  { value: "recientes", label: "Con fallas recientes" },
+];
+
 interface EquiposPageProps {
-  searchParams: { tipo?: string; estado?: string; baja?: string };
+  searchParams: { tipo?: string; estado?: string; baja?: string; fallas?: string };
 }
 
 /**
@@ -39,7 +46,10 @@ export default async function EquiposPage({ searchParams }: EquiposPageProps) {
   const tipo = searchParams.tipo || undefined;
   const estado = searchParams.estado || undefined;
   const baja = searchParams.baja;
-  const [equipos, ciclosAbiertos] = await Promise.all([
+  const soloConFallas = searchParams.fallas === "recientes";
+  // Misma ventana de 30 días que usa el tablero para contar "con fallas recientes".
+  const desdeFallas = new Date(Date.now() - HORAS_PERIODO_TUE * 60 * 60 * 1000);
+  const [equiposBase, ciclosAbiertos, fallasRecientes] = await Promise.all([
     listarEquipos({
       tipo,
       estado,
@@ -47,7 +57,13 @@ export default async function EquiposPage({ searchParams }: EquiposPageProps) {
       soloBajas: baja === "solo",
     }),
     iniciosDeCiclosAbiertos(),
+    soloConFallas ? listarFallasDesde(desdeFallas) : Promise.resolve([]),
   ]);
+  // Filtro "con fallas recientes": se intersecta con los demás filtros ya aplicados.
+  const idsConFalla = new Set(fallasRecientes.map((f) => f.equipo_id));
+  const equipos = soloConFallas
+    ? equiposBase.filter((e) => idsConFalla.has(e.id))
+    : equiposBase;
   // Horas totales al instante = acumuladas + tiempo del ciclo abierto (si está en uso).
   // Se calcula acá una sola vez y se pasa a cada tarjeta, para reflejar el estado en vivo.
   const ahora = new Date();
@@ -99,10 +115,21 @@ export default async function EquiposPage({ searchParams }: EquiposPageProps) {
             </option>
           ))}
         </select>
+        <select
+          name="fallas"
+          defaultValue={searchParams.fallas ?? ""}
+          className="rounded border border-gray-300 px-2 py-2 text-sm"
+        >
+          {FALLAS_OPCIONES.map((o) => (
+            <option key={o.value} value={o.value}>
+              {o.label}
+            </option>
+          ))}
+        </select>
         <button type="submit" className="rounded bg-gray-200 px-3 py-2 text-sm font-semibold">
           Filtrar
         </button>
-        {(tipo || estado || baja) && (
+        {(tipo || estado || baja || soloConFallas) && (
           <Link href="/equipos" className="text-sm text-gray-600 underline">
             Limpiar filtros
           </Link>

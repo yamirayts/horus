@@ -37,7 +37,7 @@ const COLOR_TUE: Record<string, string> = {
  * (TUE, MTBF, proyección de PM).
  */
 export default async function TableroPage() {
-  const { resumen, alertas, vencidos, enFalla, paraRetirar, equipos, mtbfPorTipo } = await construirTablero();
+  const { resumen, alertas, vencidos, enMantenimiento, conFallas, paraRetirar, equipos, mtbfPorTipo } = await construirTablero();
 
   const maxHoras = Math.max(1, ...TIPOS_EQUIPO.map((t) => resumen[t].horasAcumuladas));
   const conProyeccion = equipos.filter(
@@ -110,7 +110,7 @@ export default async function TableroPage() {
       )}
 
       {/* 1. Panel de alertas: KPI cards destacadas con colores fuertes. */}
-      <section className="mb-6 grid grid-cols-1 gap-3 sm:grid-cols-3">
+      <section className="mb-6 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <Link
           href="/equipos"
           className="group rounded-xl border-2 border-red-300 bg-gradient-to-br from-red-50 to-white p-5 shadow-sm transition hover:shadow-md"
@@ -144,13 +144,27 @@ export default async function TableroPage() {
           className="group rounded-xl border-2 border-slate-300 bg-gradient-to-br from-slate-50 to-white p-5 shadow-sm transition hover:shadow-md"
         >
           <div className="flex items-start justify-between">
-            <p className="text-4xl font-extrabold text-slate-700">{enFalla.length}</p>
+            <p className="text-4xl font-extrabold text-slate-700">{enMantenimiento.length}</p>
             <svg className="h-8 w-8 text-slate-400" viewBox="0 0 20 20" fill="currentColor" aria-hidden>
               <path d="M11.49 3.17a2.5 2.5 0 013.34 3.34l-9.19 9.2A2 2 0 014.22 16H3v-1.22c0-.53.21-1.04.59-1.41l9.2-9.2z" />
             </svg>
           </div>
-          <p className="mt-1 text-sm font-semibold text-slate-800">En falla o mantenimiento</p>
+          <p className="mt-1 text-sm font-semibold text-slate-800">En mantenimiento</p>
           <p className="text-xs text-slate-600">Fuera de servicio operativo</p>
+        </Link>
+
+        <Link
+          href="/equipos?fallas=recientes"
+          className="group rounded-xl border-2 border-orange-300 bg-gradient-to-br from-orange-50 to-white p-5 shadow-sm transition hover:shadow-md"
+        >
+          <div className="flex items-start justify-between">
+            <p className="text-4xl font-extrabold text-orange-700">{conFallas.length}</p>
+            <svg className="h-8 w-8 text-orange-400" viewBox="0 0 20 20" fill="currentColor" aria-hidden>
+              <path fillRule="evenodd" d="M11.983 1.907a1 1 0 00-1.966 0l-.2 1.1a5.002 5.002 0 00-1.32.547l-.94-.62a1 1 0 00-1.39 1.39l.62.94c-.24.41-.425.855-.547 1.32l-1.1.2a1 1 0 000 1.966l1.1.2c.122.465.307.91.547 1.32l-.62.94a1 1 0 001.39 1.39l.94-.62c.41.24.855.425 1.32.547l.2 1.1a1 1 0 001.966 0l.2-1.1a5.002 5.002 0 001.32-.547l.94.62a1 1 0 001.39-1.39l-.62-.94c.24-.41.425-.855.547-1.32l1.1-.2a1 1 0 000-1.966l-1.1-.2a5.002 5.002 0 00-.547-1.32l.62-.94a1 1 0 00-1.39-1.39l-.94.62a5.002 5.002 0 00-1.32-.547l-.2-1.1zM11 10a1 1 0 11-2 0 1 1 0 012 0z" clipRule="evenodd" />
+            </svg>
+          </div>
+          <p className="mt-1 text-sm font-semibold text-orange-800">Con fallas recientes</p>
+          <p className="text-xs text-orange-600">Fallas en los últimos 30 días</p>
         </Link>
       </section>
 
