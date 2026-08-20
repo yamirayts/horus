@@ -4,6 +4,7 @@ import { listarFallasDesde } from "@/lib/db/fallas";
 import { iniciosDeCiclosAbiertos } from "@/lib/db/ciclos";
 import { horasTotalesAhora } from "@/lib/horas";
 import { HORAS_PERIODO_TUE } from "@/lib/tablero";
+import { contarFallasRecientesPorEquipo } from "@/lib/fallasRecientes";
 import TarjetaEquipo from "@/app/components/TarjetaEquipo";
 
 // El estado de los equipos cambia con cada escaneo: nunca cachear esta página.
@@ -48,8 +49,9 @@ export default async function EquiposPage({ searchParams }: EquiposPageProps) {
   const baja = searchParams.baja;
   const soloConFallas = searchParams.fallas === "recientes";
   // Misma ventana de 30 días que usa el tablero para contar "con fallas recientes".
+  // Se traen siempre, para poder marcar cada card con su chip de fallas (no solo al filtrar).
   const desdeFallas = new Date(Date.now() - HORAS_PERIODO_TUE * 60 * 60 * 1000);
-  const [equiposBase, ciclosAbiertos, fallasRecientes] = await Promise.all([
+  const [equiposBase, ciclosAbiertos, fallas] = await Promise.all([
     listarEquipos({
       tipo,
       estado,
@@ -57,12 +59,13 @@ export default async function EquiposPage({ searchParams }: EquiposPageProps) {
       soloBajas: baja === "solo",
     }),
     iniciosDeCiclosAbiertos(),
-    soloConFallas ? listarFallasDesde(desdeFallas) : Promise.resolve([]),
+    listarFallasDesde(desdeFallas),
   ]);
-  // Filtro "con fallas recientes": se intersecta con los demás filtros ya aplicados.
-  const idsConFalla = new Set(fallasRecientes.map((f) => f.equipo_id));
+  const fallasPorEquipo = contarFallasRecientesPorEquipo(fallas, desdeFallas);
+  // Filtro "con fallas recientes": equipos con al menos una en la ventana; se intersecta
+  // con los demás filtros ya aplicados por listarEquipos.
   const equipos = soloConFallas
-    ? equiposBase.filter((e) => idsConFalla.has(e.id))
+    ? equiposBase.filter((e) => (fallasPorEquipo.get(e.id) ?? 0) > 0)
     : equiposBase;
   // Horas totales al instante = acumuladas + tiempo del ciclo abierto (si está en uso).
   // Se calcula acá una sola vez y se pasa a cada tarjeta, para reflejar el estado en vivo.
@@ -145,7 +148,12 @@ export default async function EquiposPage({ searchParams }: EquiposPageProps) {
       ) : (
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {equiposConHorasEnVivo.map((eq) => (
-            <TarjetaEquipo key={eq.id} equipo={eq} horasTotales={eq.horasTotales} />
+            <TarjetaEquipo
+              key={eq.id}
+              equipo={eq}
+              horasTotales={eq.horasTotales}
+              fallasRecientes={fallasPorEquipo.get(eq.id) ?? 0}
+            />
           ))}
         </div>
       )}

@@ -30,10 +30,12 @@ interface TarjetaEquipoProps {
    * refleje el estado real cuando el equipo está corriendo un ciclo.
    */
   horasTotales?: number;
+  /** Cantidad de fallas en los últimos 30 días. Si es > 0, la card muestra un chip naranja. */
+  fallasRecientes?: number;
 }
 
 /** Card resumen de un equipo: icono, id, tipo, estado, barra de umbral y ubicación. */
-export default function TarjetaEquipo({ equipo, horasTotales }: TarjetaEquipoProps) {
+export default function TarjetaEquipo({ equipo, horasTotales, fallasRecientes = 0 }: TarjetaEquipoProps) {
   const inactivo = !equipo.activo;
   return (
     <Link
@@ -76,11 +78,18 @@ export default function TarjetaEquipo({ equipo, horasTotales }: TarjetaEquipoPro
         <span className="text-slate-500">
           {equipo.ubicacion ? equipo.ubicacion : "Sin ubicación"}
         </span>
-        {inactivo && (
-          <span className="rounded-full bg-red-100 px-2 py-0.5 font-semibold text-red-800">
-            dado de baja
-          </span>
-        )}
+        <div className="flex flex-wrap items-center gap-2">
+          {fallasRecientes > 0 && (
+            <span className="rounded-full bg-orange-100 px-2 py-0.5 font-semibold text-orange-800">
+              ⚠ {fallasRecientes} {fallasRecientes === 1 ? "falla" : "fallas"} (30d)
+            </span>
+          )}
+          {inactivo && (
+            <span className="rounded-full bg-red-100 px-2 py-0.5 font-semibold text-red-800">
+              dado de baja
+            </span>
+          )}
+        </div>
       </div>
     </Link>
   );

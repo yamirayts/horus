@@ -5,6 +5,8 @@ import { listarCiclos } from "@/lib/db/ciclos";
 import { listarMantenimientos } from "@/lib/db/mantenimientos";
 import { listarFallas } from "@/lib/db/fallas";
 import { listarLecturas } from "@/lib/db/horometro";
+import { HORAS_PERIODO_TUE } from "@/lib/tablero";
+import { contarFallasRecientes } from "@/lib/fallasRecientes";
 import BarraUmbral from "@/app/components/BarraUmbral";
 import AutoRefresh from "@/app/components/AutoRefresh";
 import EquipoAcciones from "./EquipoAcciones";
@@ -71,6 +73,9 @@ export default async function DetalleEquipoPage({ params }: DetalleEquipoPagePro
   const horasTotales = Math.round((horasAcum + horasCicloEnCurso) * 100) / 100;
   const totalActividad =
     ciclos.length + mantenimientos.length + fallas.length + lecturasHorometro.length;
+  // Fallas dentro de la ventana de 30 días del tablero: motivan el banner de aviso arriba.
+  const desdeFallas = new Date(Date.now() - HORAS_PERIODO_TUE * 60 * 60 * 1000);
+  const fallasRecientesCount = contarFallasRecientes(fallas, desdeFallas);
 
   return (
     <main className="mx-auto max-w-4xl p-4">
@@ -119,6 +124,27 @@ export default async function DetalleEquipoPage({ params }: DetalleEquipoPagePro
           {ETIQUETA_ESTADO[equipo.estado] ?? equipo.estado}
         </span>
       </header>
+
+      {/* Banner de fallas recientes: visible arriba para no tener que scrollear hasta la
+          sección de historial. Ancla a #fallas. */}
+      {fallasRecientesCount > 0 && (
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-2 rounded-lg border-2 border-orange-300 bg-orange-50 p-4 text-orange-900 print:hidden">
+          <div>
+            <p className="font-semibold">
+              ⚠ {fallasRecientesCount} {fallasRecientesCount === 1 ? "falla" : "fallas"} en los últimos 30 días
+            </p>
+            <p className="text-sm">
+              El equipo tiene fallas registradas recientemente (incluye datos sintéticos del MTBF).
+            </p>
+          </div>
+          <a
+            href="#fallas"
+            className="shrink-0 rounded-lg border border-orange-400 bg-white px-3 py-1.5 text-sm font-semibold text-orange-800 hover:bg-orange-100"
+          >
+            Ver fallas ↓
+          </a>
+        </div>
+      )}
 
       {/* Auto-refresh solo si el equipo está en uso: mientras corre un ciclo abierto,
           las horas "en vivo" crecen y las alertas pueden dispararse. Cuando el equipo está
@@ -236,7 +262,7 @@ export default async function DetalleEquipoPage({ params }: DetalleEquipoPagePro
         )}
       </section>
 
-      <section className="mb-4 rounded-lg border border-slate-200 bg-white p-5 shadow-sm print:hidden">
+      <section id="fallas" className="mb-4 scroll-mt-4 rounded-lg border border-slate-200 bg-white p-5 shadow-sm print:hidden">
         <h2 className="mb-2 font-semibold text-slate-900">Fallas ({fallas.length})</h2>
         {fallas.length === 0 ? (
           <p className="text-sm text-slate-500">Sin fallas registradas.</p>
