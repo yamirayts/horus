@@ -7,6 +7,7 @@ import { listarFallas } from "@/lib/db/fallas";
 import { listarLecturas } from "@/lib/db/horometro";
 import { HORAS_PERIODO_TUE } from "@/lib/tablero";
 import { contarFallasRecientes } from "@/lib/fallasRecientes";
+import { fechaHoraAR } from "@/lib/fecha";
 import BarraUmbral from "@/app/components/BarraUmbral";
 import AutoRefresh from "@/app/components/AutoRefresh";
 import EquipoAcciones from "./EquipoAcciones";
@@ -91,7 +92,7 @@ export default async function DetalleEquipoPage({ params }: DetalleEquipoPagePro
         <div className="mb-4 rounded-lg border-2 border-red-400 bg-red-50 p-4 text-red-900 print:hidden">
           <p className="font-semibold">Equipo dado de baja</p>
           <p className="text-sm">
-            {equipo.fecha_baja ? `Fecha: ${new Date(equipo.fecha_baja).toLocaleString("es-AR")}` : ""}
+            {equipo.fecha_baja ? `Fecha: ${fechaHoraAR(equipo.fecha_baja)}` : ""}
             {equipo.motivo_baja ? ` · Motivo: ${equipo.motivo_baja}` : ""}
           </p>
           <p className="mt-1 text-sm">
@@ -223,8 +224,8 @@ export default async function DetalleEquipoPage({ params }: DetalleEquipoPagePro
               <tbody>
                 {ciclos.map((c) => (
                   <tr key={c.id} className="border-b border-slate-100 last:border-0">
-                    <td className="py-1 pr-2">{new Date(c.inicio).toLocaleString("es-AR")}</td>
-                    <td className="py-1 pr-2">{c.fin ? new Date(c.fin).toLocaleString("es-AR") : "en curso"}</td>
+                    <td className="py-1 pr-2">{fechaHoraAR(c.inicio)}</td>
+                    <td className="py-1 pr-2">{c.fin ? fechaHoraAR(c.fin) : "en curso"}</td>
                     <td className="py-1 pr-2">{c.horas_ciclo != null ? Number(c.horas_ciclo).toFixed(2) : "—"}</td>
                     <td className="py-1 pr-2">{c.ubicacion ?? "—"}</td>
                     <td className="py-1">
@@ -252,7 +253,7 @@ export default async function DetalleEquipoPage({ params }: DetalleEquipoPagePro
           <ul className="flex flex-col gap-2 text-sm">
             {mantenimientos.map((m) => (
               <li key={m.id} className="border-b border-slate-100 pb-2 last:border-0">
-                <span className="font-semibold">{m.tipo ?? "—"}</span> · {new Date(m.fecha).toLocaleString("es-AR")}
+                <span className="font-semibold">{m.tipo ?? "—"}</span> · {fechaHoraAR(m.fecha)}
                 {m.horas_al_momento != null ? ` · ${Number(m.horas_al_momento).toFixed(1)} h al momento` : ""}
                 {m.tecnico ? ` · ${m.tecnico}` : ""}
                 {m.descripcion ? <p className="text-slate-600">{m.descripcion}</p> : null}
@@ -270,7 +271,7 @@ export default async function DetalleEquipoPage({ params }: DetalleEquipoPagePro
           <ul className="flex flex-col gap-2 text-sm">
             {fallas.map((f) => (
               <li key={f.id} className="border-b border-slate-100 pb-2 last:border-0">
-                <span className="font-semibold">{f.tipo ?? "—"}</span> · {new Date(f.fecha).toLocaleString("es-AR")}
+                <span className="font-semibold">{f.tipo ?? "—"}</span> · {fechaHoraAR(f.fecha)}
                 {f.origen === "sintetico" ? (
                   <span className="ml-2 rounded bg-amber-100 px-2 py-0.5 text-xs text-amber-800">
                     dato sintético

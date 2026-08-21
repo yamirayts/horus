@@ -3,6 +3,7 @@
 import { useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { calcularDesvio } from "@/lib/horometro";
+import { fechaHoraAR } from "@/lib/fecha";
 import type { Lectura } from "@/lib/db/horometro";
 
 interface HorometroLecturasProps {
@@ -115,7 +116,7 @@ export default function HorometroLecturas({ equipoId, lecturas }: HorometroLectu
                     const desvio = horasQr != null ? calcularDesvio(horasQr, horasHorometro) : null;
                     return (
                       <tr key={l.id} className="border-b border-gray-100 last:border-0">
-                        <td className="py-1 pr-2">{new Date(l.fecha).toLocaleString("es-AR")}</td>
+                        <td className="py-1 pr-2">{fechaHoraAR(l.fecha)}</td>
                         <td className="py-1 pr-2">{horasHorometro.toFixed(2)} h</td>
                         <td className="py-1 pr-2">{horasQr != null ? `${horasQr.toFixed(2)} h` : "—"}</td>
                         <td className="py-1 pr-2">{desvio ? `${desvio.absoluto.toFixed(2)} h` : "—"}</td>
