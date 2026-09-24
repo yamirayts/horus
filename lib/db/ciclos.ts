@@ -5,6 +5,7 @@ import { calcularHorasCiclo } from "@/lib/horas";
 export interface CicloUso {
   id: number; equipo_id: string; inicio: string; fin: string | null;
   horas_ciclo: number | string | null; ubicacion: string | null; origen: "real" | "sintetico";
+  correccion_manual: boolean; motivo_correccion: string | null;
 }
 
 export async function abrirCiclo(
@@ -47,6 +48,69 @@ export async function cerrarCicloAbierto(equipoId: string, fin: Date = new Date(
     // El historial de camas queda preservado en ciclos_uso.ubicacion.
     await tx`UPDATE equipos SET estado = 'disponible', ubicacion = NULL,
              horas_acumuladas = horas_acumuladas + ${horas} WHERE id = ${equipoId}`;
+    return horas;
+  });
+}
+
+/**
+ * Último evento registrado del equipo: el instante más reciente entre inicios y fines de
+ * ciclos y mantenimientos. Ningún evento nuevo con hora pasada puede quedar antes de este
+ * límite, para no superponer ciclos ni sumar horas previas a un mantenimiento (que reinicia
+ * el contador).
+ */
+export async function ultimoEventoEquipo(equipoId: string): Promise<Date | null> {
+  const filas = await sql<{ t: Date | null }[]>`
+    SELECT GREATEST(
+      (SELECT MAX(GREATEST(inicio, COALESCE(fin, inicio))) FROM ciclos_uso WHERE equipo_id = ${equipoId}),
+      (SELECT MAX(fecha) FROM mantenimientos WHERE equipo_id = ${equipoId})
+    ) AS t`;
+  return filas[0]?.t ? new Date(filas[0].t) : null;
+}
+
+/** Inicio del ciclo abierto del equipo, o null si no está en uso. */
+export async function inicioCicloAbierto(equipoId: string): Promise<Date | null> {
+  const filas = await sql<{ inicio: Date }[]>`
+    SELECT inicio FROM ciclos_uso WHERE equipo_id = ${equipoId} AND fin IS NULL
+    ORDER BY inicio DESC LIMIT 1`;
+  return filas[0] ? new Date(filas[0].inicio) : null;
+}
+
+/**
+ * Corrección manual de Ingeniería Clínica ante un olvido de escaneo. La validación de las
+ * horas (lib/correccion.ts) la hace el llamador; acá solo se persiste en una transacción.
+ * - activar: abre un ciclo con inicio pasado (equipo pasa a 'en_uso').
+ * - cerrar:  cierra el ciclo abierto con fin pasado (equipo pasa a 'disponible').
+ * - ciclo:   inserta un ciclo completo ya cerrado y suma sus horas (equipo sigue 'disponible').
+ * En los tres casos el ciclo queda marcado con correccion_manual y su motivo.
+ * Devuelve las horas del ciclo cerrado (cerrar / ciclo) o null (activar).
+ */
+export async function registrarCorreccion(
+  equipoId: string, accion: "activar" | "cerrar" | "ciclo",
+  inicio: Date | null, fin: Date | null, ubicacion: string | null, motivo: string,
+): Promise<number | null> {
+  return sql.begin(async (tx) => {
+    if (accion === "activar") {
+      await tx`INSERT INTO ciclos_uso (equipo_id, inicio, ubicacion, origen, correccion_manual, motivo_correccion)
+               VALUES (${equipoId}, ${inicio!}, ${ubicacion}, 'real', TRUE, ${motivo})`;
+      await tx`UPDATE equipos SET estado = 'en_uso', ubicacion = ${ubicacion} WHERE id = ${equipoId}`;
+      return null;
+    }
+    if (accion === "cerrar") {
+      const abierto = await tx<{ id: number }[]>`
+        SELECT id FROM ciclos_uso WHERE equipo_id = ${equipoId} AND fin IS NULL
+        ORDER BY inicio DESC LIMIT 1`;
+      const horas = await cerrarCicloAbiertoTx(tx, equipoId, fin!);
+      if (horas === null) throw new Error(`Equipo ${equipoId} no tiene ciclo abierto`);
+      await tx`UPDATE ciclos_uso SET correccion_manual = TRUE, motivo_correccion = ${motivo}
+               WHERE id = ${abierto[0].id}`;
+      await tx`UPDATE equipos SET estado = 'disponible', ubicacion = NULL,
+               horas_acumuladas = horas_acumuladas + ${horas} WHERE id = ${equipoId}`;
+      return horas;
+    }
+    const horas = calcularHorasCiclo(inicio!, fin!);
+    await tx`INSERT INTO ciclos_uso (equipo_id, inicio, fin, horas_ciclo, ubicacion, origen, correccion_manual, motivo_correccion)
+             VALUES (${equipoId}, ${inicio!}, ${fin!}, ${horas}, ${ubicacion}, 'real', TRUE, ${motivo})`;
+    await tx`UPDATE equipos SET horas_acumuladas = horas_acumuladas + ${horas} WHERE id = ${equipoId}`;
     return horas;
   });
 }

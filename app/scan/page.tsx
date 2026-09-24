@@ -65,7 +65,7 @@ function ScanContent() {
   // Escaneo que está esperando reintento en vivo. Si la usuaria navega antes de que
   // el POST entre, lo pasamos a localStorage en el cleanup para que el drainer lo termine.
   // Se maneja con ref (no con estado) para que el cleanup lea siempre el valor actual.
-  const pendienteRef = useRef<{ id: string; ubicacion?: string } | null>(null);
+  const pendienteRef = useRef<{ id: string; ubicacion?: string; ts: number } | null>(null);
   const cancelarReintentoEnVivo = () => {
     if (reintentoRef.current != null) {
       window.clearInterval(reintentoRef.current);
@@ -95,7 +95,7 @@ function ScanContent() {
       cancelarReintentoEnVivo();
       const pendiente = pendienteRef.current;
       if (pendiente) {
-        encolar(pendiente.id, pendiente.ubicacion);
+        encolar(pendiente.id, pendiente.ubicacion, pendiente.ts);
         pendienteRef.current = null;
       }
     };
@@ -163,6 +163,9 @@ function ScanContent() {
   async function confirmar() {
     if (!accion || accion === "bloqueado") return;
     setEnviando(true);
+    // Instante del escaneo: si el envío se demora por falta de red, cada reintento informa
+    // la demora acumulada para que el servidor registre la hora real y no la de reconexión.
+    const tsEscaneo = Date.now();
     const body: { id: string; ubicacion?: string } = { id };
     if (accion === "activar" && ubicacion.trim()) {
       body.ubicacion = ubicacion.trim();
@@ -181,7 +184,7 @@ function ScanContent() {
       // volver la señal (uno activa, el otro desactiva). Mientras la pantalla esté
       // abierta el reintento en vivo es el único responsable; el cleanup del efecto
       // pasa el pendiente a la cola persistente solo si la usuaria se va antes.
-      pendienteRef.current = { id: body.id, ubicacion: body.ubicacion };
+      pendienteRef.current = { id: body.id, ubicacion: body.ubicacion, ts: tsEscaneo };
       setConfirmando({
         variante: "encolado",
         mensaje: "Sin conexión — se reintenta automáticamente…",
@@ -193,7 +196,7 @@ function ScanContent() {
           const res = await fetch("/api/scan", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(body),
+            body: JSON.stringify({ ...body, demoraMs: Date.now() - tsEscaneo }),
           });
           const data: RespuestaScan = await res.json();
           // Si volvió respuesta (aunque sea de error de aplicación), ya no hace falta reintentar.

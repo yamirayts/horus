@@ -37,6 +37,15 @@ export default function QRImprimible({ id }: QRImprimibleProps) {
 
   return (
     <div className="inline-flex w-fit flex-col items-center gap-2 rounded border-2 border-dashed border-gray-300 bg-white p-4 print:border-black print:p-3">
+      {/* Leyenda identificatoria: distingue esta etiqueta de otros QR que el equipo ya tenga
+          (p. ej. el de un CMMS), para que enfermería sepa cuál escanear. Color forzado en
+          impresión: los navegadores omiten fondos al imprimir salvo que se pida explícitamente. */}
+      <p
+        className="w-full rounded bg-teal-700 px-2 py-1 text-center text-xs font-bold uppercase tracking-wide text-white"
+        style={{ printColorAdjust: "exact", WebkitPrintColorAdjust: "exact" }}
+      >
+        Registro de uso – UCI
+      </p>
       {error && <p className="text-sm text-red-600">{error}</p>}
       {!error && !dataUrl && <p className="text-sm text-gray-500">Generando QR…</p>}
       {dataUrl && (

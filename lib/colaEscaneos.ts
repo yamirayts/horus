@@ -37,10 +37,11 @@ function guardar(items: EscaneoEncolado[]) {
 
 /** Reemplaza cualquier entrada previa del mismo id antes de encolar. Sin esto,
  *  dos taps consecutivos sobre el mismo equipo durante un corte dejan dos entradas
- *  y al reconectar se duplica el toggle. */
-export function encolar(id: string, ubicacion?: string) {
+ *  y al reconectar se duplica el toggle.
+ *  `ts` es el instante del escaneo original (no el de encolado), para conservar la hora real. */
+export function encolar(id: string, ubicacion?: string, ts: number = Date.now()) {
   const restantes = leer().filter((p) => p.id !== id);
-  restantes.push({ id, ubicacion, ts: Date.now() });
+  restantes.push({ id, ubicacion, ts });
   guardar(restantes);
 }
 
@@ -54,7 +55,9 @@ async function drenarUno(item: EscaneoEncolado): Promise<boolean> {
     const res = await fetch("/api/scan", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id: item.id, ubicacion: item.ubicacion }),
+      // demoraMs: cuánto esperó el escaneo en cola; el servidor la resta a su hora para
+      // registrar el instante real del escaneo y no el de la reconexión.
+      body: JSON.stringify({ id: item.id, ubicacion: item.ubicacion, demoraMs: Date.now() - item.ts }),
     });
     const data = await res.json().catch(() => ({}));
     // Éxito o error de aplicación (equipo desconocido, en mantenimiento): en ambos casos

@@ -12,6 +12,7 @@ import BarraUmbral from "@/app/components/BarraUmbral";
 import AutoRefresh from "@/app/components/AutoRefresh";
 import EquipoAcciones from "./EquipoAcciones";
 import HorometroLecturas from "./HorometroLecturas";
+import CorreccionManual from "./CorreccionManual";
 import ZonaAccionesCriticas from "./ZonaAccionesCriticas";
 
 // El estado y las horas cambian con cada escaneo: nunca cachear esta página.
@@ -236,6 +237,14 @@ export default async function DetalleEquipoPage({ params }: DetalleEquipoPagePro
                       >
                         {c.origen}
                       </span>
+                      {c.correccion_manual && (
+                        <span
+                          title={c.motivo_correccion ?? undefined}
+                          className="ml-1 rounded bg-sky-100 px-2 py-0.5 text-xs text-sky-800"
+                        >
+                          corrección manual
+                        </span>
+                      )}
                     </td>
                   </tr>
                 ))}
@@ -283,6 +292,10 @@ export default async function DetalleEquipoPage({ params }: DetalleEquipoPagePro
           </ul>
         )}
       </section>
+
+      {equipo.activo && (
+        <CorreccionManual equipoId={equipo.id} estado={equipo.estado} ubicacion={equipo.ubicacion} />
+      )}
 
       <HorometroLecturas equipoId={equipo.id} lecturas={lecturasHorometro} />
 

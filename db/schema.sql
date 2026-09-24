@@ -27,7 +27,9 @@ CREATE TABLE IF NOT EXISTS ciclos_uso (
   fin          TIMESTAMPTZ,                          -- NULL mientras está en uso
   horas_ciclo  NUMERIC(10,2),                        -- se calcula al cerrar
   ubicacion    TEXT,
-  origen       TEXT NOT NULL DEFAULT 'real'          -- 'real' | 'sintetico'
+  origen       TEXT NOT NULL DEFAULT 'real',         -- 'real' | 'sintetico'
+  correccion_manual BOOLEAN NOT NULL DEFAULT FALSE,  -- TRUE = cargado/cerrado a mano por IC
+  motivo_correccion TEXT                             -- motivo declarado de la corrección
 );
 CREATE INDEX IF NOT EXISTS idx_ciclos_equipo ON ciclos_uso(equipo_id);
 CREATE INDEX IF NOT EXISTS idx_ciclos_abierto ON ciclos_uso(equipo_id) WHERE fin IS NULL;
