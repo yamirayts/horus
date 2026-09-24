@@ -2,6 +2,7 @@
 
 import { useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
+import { ESCENARIO } from "@/lib/escenario";
 
 interface CorreccionManualProps {
   equipoId: string;
@@ -133,12 +134,19 @@ export default function CorreccionManual({ equipoId, estado, ubicacion }: Correc
         {pideInicio && (
           <label className="text-sm">
             Cama
-            <input
+            <select
+              required
               value={cama}
               onChange={(e) => setCama(e.target.value)}
-              placeholder="Ej.: Cama 5"
-              className="mt-1 w-full rounded border border-gray-300 px-2 py-2"
-            />
+              className="mt-1 w-full rounded border border-gray-300 bg-white px-2 py-2"
+            >
+              <option value="">— elegí la cama —</option>
+              {Array.from({ length: ESCENARIO.camas }, (_, i) => i + 1).map((n) => (
+                <option key={n} value={`Cama ${n}`}>
+                  Cama {n}
+                </option>
+              ))}
+            </select>
           </label>
         )}
         <label className="text-sm md:col-span-2">

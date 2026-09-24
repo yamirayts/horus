@@ -383,7 +383,7 @@ function ScanContent() {
         {accion === "activar" && (
           <div className="mt-5">
             <label htmlFor="ubicacion" className="block text-sm font-medium text-gray-700">
-              Cama
+              Cama <span className="text-red-600">*</span>
             </label>
             <select
               id="ubicacion"
@@ -391,7 +391,7 @@ function ScanContent() {
               onChange={(e) => setUbicacion(e.target.value)}
               className="mt-1 w-full rounded border border-gray-300 bg-white px-3 py-2 text-base focus:border-gray-500 focus:outline-none"
             >
-              <option value="">— sin cama —</option>
+              <option value="">— elegí la cama —</option>
               {Array.from({ length: ESCENARIO.camas }, (_, i) => i + 1).map((n) => (
                 <option key={n} value={`Cama ${n}`}>
                   Cama {n}
@@ -404,7 +404,8 @@ function ScanContent() {
         <button
           type="button"
           onClick={confirmar}
-          disabled={enviando || accion === "bloqueado"}
+          // La cama es obligatoria al activar: sin ella se pierde la trazabilidad por cama.
+          disabled={enviando || accion === "bloqueado" || (accion === "activar" && !ubicacion)}
           className={`mt-6 w-full rounded-lg py-6 text-2xl font-bold text-white ${colorAccion} disabled:opacity-60`}
         >
           {enviando ? "…" : etiquetaAccion}

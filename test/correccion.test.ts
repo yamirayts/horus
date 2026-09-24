@@ -29,7 +29,9 @@ describe("momentoDelEscaneo", () => {
 });
 
 describe("validarCorreccion", () => {
-  const base = { ahora: AHORA, limiteInferior: h(48), inicioAbierto: null, motivo: "olvido de escaneo" };
+  const base = {
+    ahora: AHORA, limiteInferior: h(48), inicioAbierto: null, motivo: "olvido de escaneo", ubicacion: "Cama 3",
+  };
 
   it("exige motivo", () => {
     expect(validarCorreccion({ ...base, accion: "activar", inicio: h(2), motivo: "  " })).toMatch(/motivo/);
@@ -44,6 +46,10 @@ describe("validarCorreccion", () => {
     });
     it("rechaza un inicio anterior al último evento del equipo", () => {
       expect(validarCorreccion({ ...base, accion: "activar", inicio: h(50) })).toMatch(/anterior/);
+    });
+    it("exige la cama", () => {
+      expect(validarCorreccion({ ...base, accion: "activar", inicio: h(2), ubicacion: "" })).toMatch(/cama/);
+      expect(validarCorreccion({ ...base, accion: "ciclo", inicio: h(10), fin: h(4), ubicacion: null })).toMatch(/cama/);
     });
     it("rechaza si el equipo ya tiene un ciclo abierto", () => {
       expect(

@@ -50,7 +50,11 @@ export async function POST(req: NextRequest) {
       ? momentoDelEscaneo(new Date(), demoraMs, await ultimoEventoEquipo(id))
       : new Date();
     if (accion === "activar") {
-      await abrirCiclo(id, ubicacion ?? equipo.ubicacion ?? null, "real", momento);
+      // La cama es obligatoria: cada ciclo debe quedar asociado a una cama (trazabilidad).
+      if (!ubicacion || !String(ubicacion).trim()) {
+        return NextResponse.json({ ok: false, error: "falta la cama" }, { status: 400 });
+      }
+      await abrirCiclo(id, String(ubicacion).trim(), "real", momento);
       return NextResponse.json({ ok: true, accion, equipo: { ...equipo, estado: "en_uso" } });
     }
     if (accion === "desactivar") {

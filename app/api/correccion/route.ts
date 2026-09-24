@@ -27,14 +27,14 @@ export async function POST(req: NextRequest) {
   const fin = aFecha(body.fin);
   const [abierto, ultimo] = await Promise.all([inicioCicloAbierto(equipo_id), ultimoEventoEquipo(equipo_id)]);
   const error = validarCorreccion({
-    accion, inicio, fin, motivo: String(motivo ?? ""),
+    accion, inicio, fin, motivo: String(motivo ?? ""), ubicacion: ubicacion ? String(ubicacion) : null,
     ahora: new Date(), limiteInferior: ultimo, inicioAbierto: abierto,
   });
   if (error) return NextResponse.json({ ok: false, error }, { status: 400 });
 
   try {
     const horas = await registrarCorreccion(
-      equipo_id, accion, inicio, fin, ubicacion || equipo.ubicacion || null, String(motivo).trim(),
+      equipo_id, accion, inicio, fin, ubicacion ? String(ubicacion).trim() : null, String(motivo).trim(),
     );
     // Igual que al desactivar por escaneo: si al sumar las horas corregidas el equipo quedó
     // vencido y está libre, se aparta a 'mantenimiento' para que no pueda reasignarse.

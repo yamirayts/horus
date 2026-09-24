@@ -34,6 +34,8 @@ export interface Correccion {
   inicio?: Date | null;
   fin?: Date | null;
   motivo: string;
+  /** Cama del ciclo; obligatoria al activar o cargar un ciclo completo. */
+  ubicacion?: string | null;
   ahora: Date;
   /** Último evento del equipo (fin del último ciclo o último mantenimiento). */
   limiteInferior: Date | null;
@@ -58,6 +60,7 @@ export function validarCorreccion(c: Correccion): string | null {
   }
 
   if (c.inicioAbierto) return "El equipo está en uso: primero cerrá el ciclo abierto.";
+  if (!c.ubicacion || !c.ubicacion.trim()) return "Indicá la cama.";
   if (!esFecha(c.inicio)) return "Falta la fecha y hora de inicio.";
   if (c.inicio.getTime() > ahora) return "La hora de inicio no puede ser futura.";
   if (anteriorAlLimite(c.inicio)) return "La hora de inicio es anterior al último evento registrado del equipo.";

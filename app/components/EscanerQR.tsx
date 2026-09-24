@@ -532,7 +532,7 @@ export default function EscanerQR() {
                       htmlFor="ubi-activar"
                       className="block text-sm font-medium text-gray-200"
                     >
-                      Cama
+                      Cama <span className="text-red-400">*</span>
                     </label>
                     <select
                       id="ubi-activar"
@@ -540,7 +540,7 @@ export default function EscanerQR() {
                       onChange={(e) => setUbicacionActivar(e.target.value)}
                       className="mt-1 w-full rounded border border-gray-500 bg-gray-900 px-3 py-2 text-base text-white focus:border-white focus:outline-none"
                     >
-                      <option value="">— sin cama —</option>
+                      <option value="">— elegí la cama —</option>
                       {Array.from({ length: ESCENARIO.camas }, (_, i) => i + 1).map((n) => (
                         <option key={n} value={`Cama ${n}`}>
                           Cama {n}
@@ -552,7 +552,9 @@ export default function EscanerQR() {
                 <button
                   type="button"
                   onClick={() => confirmarAccion(estado.id, estado.accion)}
-                  className={`w-full max-w-xs rounded-xl py-10 text-3xl font-extrabold text-white shadow-lg active:scale-95 ${
+                  // La cama es obligatoria al activar (trazabilidad por cama).
+                  disabled={estado.accion === "activar" && !ubicacionActivar}
+                  className={`w-full max-w-xs rounded-xl py-10 text-3xl font-extrabold text-white shadow-lg active:scale-95 disabled:opacity-50 ${
                     estado.accion === "activar" ? "bg-green-600" : "bg-orange-600"
                   }`}
                 >
