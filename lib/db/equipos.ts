@@ -10,6 +10,8 @@ export interface Equipo {
   activo: boolean;
   fecha_baja: string | null;
   motivo_baja: string | null;
+  /** Umbral de ciclo atípicamente largo propio del equipo; NULL = el de su tipo. */
+  umbral_ciclo_largo_dias?: number | string | null;
 }
 export interface NuevoEquipo {
   id: string; tipo: string; marca?: string; modelo?: string;
@@ -53,12 +55,19 @@ export async function crearEquipo(e: NuevoEquipo): Promise<void> {
 export async function actualizarEquipoConfig(id: string, c: {
   umbral_horas?: number; pct_alerta?: number; pct_vencido?: number; horas_iniciales?: number;
   marca?: string; modelo?: string; numero_serie?: string;
+  umbral_ciclo_largo_dias?: number | null;
 }): Promise<void> {
   const actual = await getEquipo(id);
   if (!actual) throw new Error(`Equipo ${id} no existe`);
   const nuevoInicial = c.horas_iniciales ?? actual.horas_iniciales;
   // Si cambian las horas iniciales, ajustar acumuladas por la diferencia.
   const deltaInicial = nuevoInicial - actual.horas_iniciales;
+  // Solo se toca el umbral de ciclo largo si viene en el body (la columna es de la migración 003).
+  if (c.umbral_ciclo_largo_dias !== undefined) {
+    const dias = c.umbral_ciclo_largo_dias;
+    if (dias !== null && !(Number(dias) > 0)) throw new Error("El umbral de ciclo largo debe ser mayor que 0");
+    await sql`UPDATE equipos SET umbral_ciclo_largo_dias = ${dias} WHERE id = ${id}`;
+  }
   await sql`
     UPDATE equipos SET
       umbral_horas = ${c.umbral_horas ?? actual.umbral_horas},

@@ -8,6 +8,7 @@ import { listarLecturas } from "@/lib/db/horometro";
 import { HORAS_PERIODO_TUE } from "@/lib/tablero";
 import { contarFallasRecientes } from "@/lib/fallasRecientes";
 import { fechaHoraAR } from "@/lib/fecha";
+import { umbralCicloLargoDias, esCicloLargo, diasAbierto, DIAS_CICLO_LARGO_POR_TIPO, DIAS_CICLO_LARGO_DEFECTO } from "@/lib/cicloLargo";
 import BarraUmbral from "@/app/components/BarraUmbral";
 import AutoRefresh from "@/app/components/AutoRefresh";
 import EquipoAcciones from "./EquipoAcciones";
@@ -78,6 +79,9 @@ export default async function DetalleEquipoPage({ params }: DetalleEquipoPagePro
   // Fallas dentro de la ventana de 30 días del tablero: motivan el banner de aviso arriba.
   const desdeFallas = new Date(Date.now() - HORAS_PERIODO_TUE * 60 * 60 * 1000);
   const fallasRecientesCount = contarFallasRecientes(fallas, desdeFallas);
+  // Regla de ciclo atípicamente largo: posible olvido de escaneo al retirar el equipo.
+  const umbralCicloLargo = umbralCicloLargoDias(equipo.tipo, equipo.umbral_ciclo_largo_dias);
+  const cicloLargo = esCicloLargo(inicioCicloAbierto, umbralCicloLargo);
 
   return (
     <main className="mx-auto max-w-4xl p-4">
@@ -148,6 +152,19 @@ export default async function DetalleEquipoPage({ params }: DetalleEquipoPagePro
         </div>
       )}
 
+      {/* Banner de ciclo atípicamente largo: el equipo figura en uso más de lo esperable. */}
+      {cicloLargo && inicioCicloAbierto && (
+        <div className="mb-4 rounded-lg border-2 border-violet-300 bg-violet-50 p-4 text-violet-900 print:hidden">
+          <p className="font-semibold">
+            ⏱ Ciclo atípicamente largo: {diasAbierto(inicioCicloAbierto)} días en uso (umbral {umbralCicloLargo} días)
+          </p>
+          <p className="text-sm">
+            Verificar en sala si el equipo sigue asignado. Si se retiró sin escanear, registrar el cierre
+            con su hora real desde la corrección manual.
+          </p>
+        </div>
+      )}
+
       {/* Auto-refresh solo si el equipo está en uso: mientras corre un ciclo abierto,
           las horas "en vivo" crecen y las alertas pueden dispararse. Cuando el equipo está
           disponible, el estado no cambia sin acción del usuario y no hace falta refrescar. */}
@@ -202,6 +219,8 @@ export default async function DetalleEquipoPage({ params }: DetalleEquipoPagePro
           marca={equipo.marca}
           modelo={equipo.modelo}
           numeroSerie={equipo.numero_serie}
+          cicloLargoDias={equipo.umbral_ciclo_largo_dias != null ? Number(equipo.umbral_ciclo_largo_dias) : null}
+          cicloLargoDefecto={DIAS_CICLO_LARGO_POR_TIPO[equipo.tipo] ?? DIAS_CICLO_LARGO_DEFECTO}
         />
       </div>
 

@@ -4,6 +4,7 @@ import { sumarHorasPorEquipoDesde, iniciosDeCiclosAbiertos } from "@/lib/db/cicl
 import { estadoAlerta, pctUmbral, type NivelAlerta } from "@/lib/alertas";
 import { calcularTUE, clasificarTUE, calcularMTBF, proyeccionDiasHastaPM } from "@/lib/indicadores";
 import { horasTotalesAhora } from "@/lib/horas";
+import { umbralCicloLargoDias, esCicloLargo, diasAbierto } from "@/lib/cicloLargo";
 
 // Período de TUE: últimos 30 días expresados en horas.
 export const DIAS_PERIODO_TUE = 30;
@@ -19,6 +20,8 @@ export interface EquipoTablero extends Equipo {
   pct: number;
   /** Cantidad de fallas registradas en la ventana de 30 días (incluye sintéticas del MTBF). */
   fallasRecientes: number;
+  /** Ciclo abierto por más tiempo que su umbral (posible olvido de desactivación), o null. */
+  cicloLargo: { dias: number; umbralDias: number } | null;
   indicadores: {
     tue: number;
     tueClase: "sobreexigido" | "normal" | "subutilizado";
@@ -45,6 +48,8 @@ export interface Tablero {
   conFallas: EquipoTablero[];
   /** Equipos que superaron el umbral y quedaron apartados en 'mantenimiento'. Requieren retiro para intervención. */
   paraRetirar: EquipoTablero[];
+  /** Equipos "en uso" con un ciclo abierto atípicamente largo (ver lib/cicloLargo.ts). */
+  ciclosLargos: EquipoTablero[];
   equipos: EquipoTablero[];
   mtbfPorTipo: Record<TipoEquipo, number | null>;
 }
@@ -90,6 +95,10 @@ export async function construirTablero(): Promise<Tablero> {
     const nivel = estadoAlerta(horasTotales, umbral, pctAlertaCfg, pctVencidoCfg);
     const pct = pctUmbral(horasTotales, umbral);
     const fallasRecientes = fallasPorEquipo.get(eq.id) ?? 0;
+    const umbralDias = umbralCicloLargoDias(eq.tipo, eq.umbral_ciclo_largo_dias);
+    const cicloLargo = esCicloLargo(inicioCicloAbierto, umbralDias, ahora)
+      ? { dias: diasAbierto(inicioCicloAbierto!, ahora), umbralDias }
+      : null;
 
     // Para TUE incluimos las horas del ciclo abierto además de las cerradas en el período.
     const horasUsoPeriodo = (horasUsoPorEquipo[eq.id] ?? 0) + (inicioCicloAbierto
@@ -105,6 +114,7 @@ export async function construirTablero(): Promise<Tablero> {
       nivel,
       pct,
       fallasRecientes,
+      cicloLargo,
       indicadores: { tue, tueClase: clasificarTUE(tue), horasUsoPeriodo, proyeccionDias },
     };
   });
@@ -127,6 +137,11 @@ export async function construirTablero(): Promise<Tablero> {
     (e) => e.estado === "mantenimiento" && e.nivel === "vencido",
   );
 
+  // Más días abiertos primero.
+  const ciclosLargos = equiposConNivel
+    .filter((e) => e.cicloLargo !== null)
+    .sort((a, b) => b.cicloLargo!.dias - a.cicloLargo!.dias);
+
   const resumen = {} as Record<TipoEquipo, ResumenTipo>;
   const mtbfPorTipo = {} as Record<TipoEquipo, number | null>;
   for (const tipo of TIPOS_EQUIPO) {
@@ -142,5 +157,5 @@ export async function construirTablero(): Promise<Tablero> {
     mtbfPorTipo[tipo] = calcularMTBF(r.horasAcumuladas, fallasPorTipo.get(tipo) ?? 0);
   }
 
-  return { resumen, alertas, vencidos, enMantenimiento, conFallas, paraRetirar, equipos: equiposConNivel, mtbfPorTipo };
+  return { resumen, alertas, vencidos, enMantenimiento, conFallas, paraRetirar, ciclosLargos, equipos: equiposConNivel, mtbfPorTipo };
 }

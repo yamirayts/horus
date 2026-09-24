@@ -12,6 +12,10 @@ interface EquipoAccionesProps {
   marca: string | null;
   modelo: string | null;
   numeroSerie: string | null;
+  /** Umbral de ciclo largo propio del equipo (null = usa el de su tipo). */
+  cicloLargoDias: number | null;
+  /** Umbral de ciclo largo por defecto del tipo, para mostrarlo como referencia. */
+  cicloLargoDefecto: number;
 }
 
 type Mensaje = { tipo: "ok" | "error"; texto: string } | null;
@@ -24,6 +28,7 @@ type Mensaje = { tipo: "ok" | "error"; texto: string } | null;
  */
 export default function EquipoAcciones({
   equipoId, umbralHoras, pctAlerta, pctVencido, marca, modelo, numeroSerie,
+  cicloLargoDias, cicloLargoDefecto,
 }: EquipoAccionesProps) {
   const router = useRouter();
 
@@ -39,6 +44,8 @@ export default function EquipoAcciones({
   const [cfgMarca, setCfgMarca] = useState(marca ?? "");
   const [cfgModelo, setCfgModelo] = useState(modelo ?? "");
   const [cfgSerie, setCfgSerie] = useState(numeroSerie ?? "");
+  const cicloInicial = cicloLargoDias != null ? String(cicloLargoDias) : "";
+  const [cfgCicloLargo, setCfgCicloLargo] = useState(cicloInicial);
   const [cfgEnviando, setCfgEnviando] = useState(false);
   const [cfgMensaje, setCfgMensaje] = useState<Mensaje>(null);
 
@@ -87,6 +94,10 @@ export default function EquipoAcciones({
           marca: cfgMarca || undefined,
           modelo: cfgModelo || undefined,
           numero_serie: cfgSerie || undefined,
+          // Solo se envía si cambió; vacío = volver al valor por defecto del tipo.
+          ...(cfgCicloLargo !== cicloInicial
+            ? { umbral_ciclo_largo_dias: cfgCicloLargo === "" ? null : Number(cfgCicloLargo) }
+            : {}),
         }),
       });
       const data = await res.json();
@@ -208,6 +219,22 @@ export default function EquipoAcciones({
               />
             </label>
           </div>
+          <label className="text-sm">
+            Ciclo atípicamente largo (días)
+            <input
+              type="number"
+              min={0.5}
+              step={0.5}
+              value={cfgCicloLargo}
+              onChange={(e) => setCfgCicloLargo(e.target.value)}
+              placeholder={`${cicloLargoDefecto} (valor del tipo)`}
+              className="mt-1 w-full rounded border border-slate-300 px-2 py-2"
+            />
+            <span className="mt-1 block text-xs text-slate-500">
+              Si el equipo figura en uso más tiempo que esto, se marca como posible olvido de escaneo.
+              Vacío = valor por defecto del tipo ({cicloLargoDefecto} días).
+            </span>
+          </label>
           <div className="grid grid-cols-2 gap-3">
             <label className="text-sm">
               Marca

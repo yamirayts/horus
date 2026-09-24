@@ -25,7 +25,7 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
 
 // PATCH /api/equipos/[id] — edita configuración y datos editables del equipo.
 // Body soporta: umbral_horas, pct_alerta, pct_vencido, horas_iniciales,
-// marca, modelo, numero_serie, además de acciones especiales:
+// marca, modelo, numero_serie, umbral_ciclo_largo_dias (null = el del tipo), además de acciones especiales:
 //   { accion: "baja", motivo?: string } — baja lógica.
 //   { accion: "reactivar" } — revierte la baja.
 export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {

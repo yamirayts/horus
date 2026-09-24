@@ -37,7 +37,7 @@ const COLOR_TUE: Record<string, string> = {
  * (TUE, MTBF, proyección de PM).
  */
 export default async function TableroPage() {
-  const { resumen, alertas, vencidos, enMantenimiento, conFallas, paraRetirar, equipos, mtbfPorTipo } = await construirTablero();
+  const { resumen, alertas, vencidos, enMantenimiento, conFallas, paraRetirar, ciclosLargos, equipos, mtbfPorTipo } = await construirTablero();
 
   const maxHoras = Math.max(1, ...TIPOS_EQUIPO.map((t) => resumen[t].horasAcumuladas));
   const conProyeccion = equipos.filter(
@@ -110,7 +110,7 @@ export default async function TableroPage() {
       )}
 
       {/* 1. Panel de alertas: KPI cards destacadas con colores fuertes. */}
-      <section className="mb-6 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      <section className="mb-6 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-5">
         <Link
           href="/equipos"
           className="group rounded-xl border-2 border-red-300 bg-gradient-to-br from-red-50 to-white p-5 shadow-sm transition hover:shadow-md"
@@ -166,7 +166,46 @@ export default async function TableroPage() {
           <p className="mt-1 text-sm font-semibold text-orange-800">Con fallas recientes</p>
           <p className="text-xs text-orange-600">Fallas en los últimos 30 días</p>
         </Link>
+
+        <a
+          href="#ciclos-largos"
+          className="group rounded-xl border-2 border-violet-300 bg-gradient-to-br from-violet-50 to-white p-5 shadow-sm transition hover:shadow-md"
+        >
+          <div className="flex items-start justify-between">
+            <p className="text-4xl font-extrabold text-violet-700">{ciclosLargos.length}</p>
+            <span className="text-2xl" aria-hidden>⏱</span>
+          </div>
+          <p className="mt-1 text-sm font-semibold text-violet-800">Ciclos atípicamente largos</p>
+          <p className="text-xs text-violet-600">En uso más de lo esperable: posible olvido de escaneo</p>
+        </a>
       </section>
+
+      {/* Detalle de ciclos atípicamente largos (regla de control operativo, ver lib/cicloLargo.ts). */}
+      {ciclosLargos.length > 0 && (
+        <section id="ciclos-largos" className="mb-6 scroll-mt-4 rounded-xl border border-violet-200 bg-white p-5 shadow-sm">
+          <h2 className="font-semibold text-slate-900">Ciclos atípicamente largos ({ciclosLargos.length})</h2>
+          <p className="mb-3 text-xs text-slate-500">
+            Equipos que figuran en uso más tiempo que su umbral (por defecto 14 días para bombas y monitores y
+            21 para ventiladores; editable por equipo). Verificar en sala y, si se retiraron sin escanear,
+            registrar el cierre desde la corrección manual del equipo.
+          </p>
+          <ul className="flex flex-wrap gap-2 text-sm">
+            {ciclosLargos.map((eq) => (
+              <li key={eq.id}>
+                <Link
+                  href={`/equipos/${encodeURIComponent(eq.id)}`}
+                  className="inline-flex items-center gap-1 rounded-full border border-violet-300 bg-violet-50 px-3 py-1 text-violet-900 hover:bg-violet-100"
+                >
+                  <span className="font-mono font-semibold">{eq.id}</span>
+                  <span className="text-xs">
+                    · {eq.cicloLargo!.dias} d{eq.ubicacion ? ` · ${eq.ubicacion}` : ""}
+                  </span>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
 
       {/* 2. Resumen por tipo con icono grande. */}
       <section className="mb-6">

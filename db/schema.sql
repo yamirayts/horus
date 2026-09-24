@@ -17,7 +17,8 @@ CREATE TABLE IF NOT EXISTS equipos (
   ubicacion         TEXT,                           -- cama/sector del equipo (NUNCA paciente)
   activo            BOOLEAN NOT NULL DEFAULT TRUE,  -- FALSE = baja lógica; sale de listas y tablero
   fecha_baja        TIMESTAMPTZ,                    -- momento en que se dio de baja lógica
-  motivo_baja       TEXT                            -- motivo declarado por el usuario
+  motivo_baja       TEXT,                           -- motivo declarado por el usuario
+  umbral_ciclo_largo_dias NUMERIC(5,1)              -- NULL = valor por defecto del tipo (lib/cicloLargo.ts)
 );
 
 CREATE TABLE IF NOT EXISTS ciclos_uso (
