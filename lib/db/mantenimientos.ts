@@ -24,7 +24,8 @@ export async function registrarMantenimiento(m: NuevoMantenimiento): Promise<voi
 
     await tx`INSERT INTO mantenimientos (equipo_id, tipo, descripcion, horas_al_momento, tecnico)
              VALUES (${m.equipo_id}, ${m.tipo ?? null}, ${m.descripcion ?? null}, ${horas}, ${m.tecnico ?? null})`;
-    await tx`UPDATE equipos SET horas_acumuladas = 0, horas_iniciales = 0, estado = 'disponible'
+    // Vuelve al pool tras el service: se libera la cama (la ubicación solo vale en uso).
+    await tx`UPDATE equipos SET horas_acumuladas = 0, horas_iniciales = 0, estado = 'disponible', ubicacion = NULL
              WHERE id = ${m.equipo_id}`;
   });
 }

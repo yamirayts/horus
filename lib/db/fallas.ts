@@ -25,7 +25,8 @@ export async function registrarFalla(f: NuevaFalla): Promise<void> {
     if (eq[0]?.estado === "en_uso") {
       horasCiclo = (await cerrarCicloAbiertoTx(tx, f.equipo_id, f.fecha ?? new Date())) ?? 0;
     }
-    await tx`UPDATE equipos SET estado = 'mantenimiento',
+    // Fuera de servicio: se libera la cama (la ubicación solo vale en uso).
+    await tx`UPDATE equipos SET estado = 'mantenimiento', ubicacion = NULL,
              horas_acumuladas = horas_acumuladas + ${horasCiclo} WHERE id = ${f.equipo_id}`;
   });
 }

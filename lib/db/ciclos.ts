@@ -43,7 +43,9 @@ export async function cerrarCicloAbierto(equipoId: string, fin: Date = new Date(
   return sql.begin(async (tx) => {
     const horas = await cerrarCicloAbiertoTx(tx, equipoId, fin);
     if (horas === null) throw new Error(`Equipo ${equipoId} no tiene ciclo abierto`);
-    await tx`UPDATE equipos SET estado = 'disponible',
+    // Al liberar el equipo se limpia la cama: la ubicación solo tiene sentido en uso.
+    // El historial de camas queda preservado en ciclos_uso.ubicacion.
+    await tx`UPDATE equipos SET estado = 'disponible', ubicacion = NULL,
              horas_acumuladas = horas_acumuladas + ${horas} WHERE id = ${equipoId}`;
     return horas;
   });
